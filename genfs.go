@@ -7,7 +7,7 @@ import (
 	"github.com/matthewmueller/virt"
 )
 
-type Generators interface {
+type Interface interface {
 	GenerateFile(path string, fn func(fsys FS, file *File) error)
 	FileGenerator(path string, generator FileGenerator)
 	GenerateDir(path string, fn func(fsys FS, dir *Dir) error)
@@ -38,6 +38,14 @@ func New() *FileSystem {
 type FileSystem struct {
 	tree    *tree    // Tree for the generators and filler nodes
 	session *Session // Default session
+}
+
+type Generator interface {
+	Generator(fsys Interface)
+}
+
+func (f *FileSystem) Generator(generator Generator) {
+	generator.Generator(f)
 }
 
 func (f *FileSystem) GenerateFile(path string, fn func(fsys FS, file *File) error) {

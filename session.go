@@ -26,13 +26,13 @@ func (f *Session) Open(target string) (fs.File, error) {
 
 func (f *Session) openFrom(previous string, target string) (fs.File, error) {
 	// First look for an exact matching generator
-	node, found := f.tree.Find(target)
-	if found && node.Generator != nil {
-		file, err := node.Generator.Generate(f.Cache, target)
+	match, found := f.tree.Find(target)
+	if found && match.Generator != nil {
+		file, err := match.Generator.Generate(f.Cache, target)
 		if err != nil {
 			return nil, formatError(err, "open %q", target)
 		}
-		return wrapFile(file, f, node.Path), nil
+		return wrapFile(file, f, match.Path), nil
 	}
 	// Next try opening the file from the fallback filesystem
 	if file, err := f.FS.Open(target); nil == err {
@@ -42,18 +42,18 @@ func (f *Session) openFrom(previous string, target string) (fs.File, error) {
 	}
 	// Next, if we did find a generator node above, return it now. It'll be a
 	// filler directory, not a generator.
-	if found && node.Mode.IsDir() {
+	if found && match.Mode.IsDir() {
 		dir := virt.Open(&virt.File{
 			Path: target,
-			Mode: node.Mode.FileMode(),
+			Mode: match.Mode.FileMode(),
 		})
-		return wrapFile(dir, f, node.Path), nil
+		return wrapFile(dir, f, match.Path), nil
 	}
 	// Lastly, try finding a node by its prefix
-	node, found = f.tree.FindPrefix(target)
-	if found && node.Path != previous && node.Mode.IsDir() && node.Generator != nil {
-		if file, err := node.Generator.Generate(f.Cache, target); nil == err {
-			return wrapFile(file, f, node.Path), nil
+	match, found = f.tree.FindPrefix(target)
+	if found && match.Path != previous && match.Mode.IsDir() && match.Generator != nil {
+		if file, err := match.Generator.Generate(f.Cache, target); nil == err {
+			return wrapFile(file, f, match.Path), nil
 		} else if !errors.Is(err, fs.ErrNotExist) {
 			return nil, formatError(err, "open by prefix %q", target)
 		}
@@ -64,20 +64,20 @@ func (f *Session) openFrom(previous string, target string) (fs.File, error) {
 
 func (f *Session) ReadDir(target string) ([]fs.DirEntry, error) {
 	deset := newDirEntrySet()
-	node, ok := f.tree.Find(target)
+	match, ok := f.tree.Find(target)
 	if ok {
-		if !node.Mode.IsDir() {
+		if !match.Mode.IsDir() {
 			return nil, formatError(errNotImplemented, "tree readdir %q", target)
 		}
 		// Run the directory generator
-		if node.Mode.IsGen() {
+		if match.Mode.IsGen() {
 			// Generate is expected to update the tree, that's why we don't use the
 			// returned file
-			if _, err := node.Generator.Generate(f.Cache, target); err != nil {
+			if _, err := match.Generator.Generate(f.Cache, target); err != nil {
 				return nil, err
 			}
 		}
-		for _, child := range node.children {
+		for _, child := range match.Children() {
 			deset.Add(newDirEntry(f, child.Name, child.Mode.FileMode(), child.Path))
 		}
 	}

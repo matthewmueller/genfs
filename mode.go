@@ -7,9 +7,8 @@ type mode uint8
 const (
 	modeDir mode = 1 << iota
 	modeGen
+	modeGenDir = modeGen | modeDir
 )
-
-const modeGenDir = modeGen | modeDir
 
 func (m mode) IsDir() bool {
 	return m&modeDir != 0

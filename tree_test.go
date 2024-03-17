@@ -136,3 +136,30 @@ func TestTreeGeneratorAndDirectory(t *testing.T) {
 	is.True(ok)
 	is.Equal(node.Path, "bud/node_modules/runtime/hot")
 }
+
+func TestTreeRootDirGenerator(t *testing.T) {
+	is := is.New(t)
+	n := newTree()
+	n.Insert(".", modeGenDir, ag)
+	node, ok := n.FindPrefix("index.html")
+	is.True(ok)
+	is.Equal(node.Path, ".")
+	is.True(node.Generator != nil)
+	expect := `. mode=dg generator=a
+`
+	is.Equal(n.Print(), expect)
+}
+
+// func TestTreeRootSharedDirGenerator(t *testing.T) {
+// 	is := is.New(t)
+// 	n := newTree()
+// 	n.Insert(".", modeGenDir, ag)
+// 	n.Insert(".", modeGenDir, bg)
+// 	node, ok := n.FindPrefix("index.html")
+// 	is.True(ok)
+// 	is.Equal(node.Path, ".")
+// 	is.True(node.Generator != nil)
+// 	expect := `. mode=dg generator=a
+// `
+// 	is.Equal(n.Print(), expect)
+// }

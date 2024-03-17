@@ -1245,3 +1245,71 @@ func ExampleFS() {
 	fmt.Println(string(code))
 	// Output: a
 }
+
+type Preact struct {
+}
+
+func (p *Preact) Generator(fsys genfs.Interface) {
+	fsys.ServeFile(".", p.serveFile)
+}
+
+func (p *Preact) serveFile(fsys genfs.FS, file *genfs.File) error {
+	switch file.Target() {
+	case "index.html":
+		file.Write([]byte("<h1>index</h1>"))
+		return nil
+	case "index.js":
+		file.Write([]byte("console.log('index')"))
+		return nil
+	default:
+		return fs.ErrNotExist
+	}
+}
+
+func TestServeRoot(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New()
+	fsys.Generator(&Preact{})
+	code, err := fs.ReadFile(fsys, "index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
+	code, err = fs.ReadFile(fsys, "index.js")
+	is.NoErr(err)
+	is.Equal(string(code), `console.log('index')`)
+}
+
+type PublicDir struct {
+}
+
+func (p *PublicDir) Generator(fsys genfs.Interface) {
+	fsys.ServeFile(".", p.serveFile)
+}
+
+var favicon = []byte{0x00, 0x00, 0x01}
+
+func (p *PublicDir) serveFile(fsys genfs.FS, file *genfs.File) error {
+	switch file.Target() {
+	case "favicon.ico":
+		file.Write([]byte(favicon))
+		return nil
+	default:
+		return fs.ErrNotExist
+	}
+}
+
+func TestServeShared(t *testing.T) {
+	t.Skip("wip")
+	is := is.New(t)
+	fsys := genfs.New()
+	fsys.Generator(&Preact{})
+	fsys.Generator(&PublicDir{})
+	code, err := fs.ReadFile(fsys, "index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
+	code, err = fs.ReadFile(fsys, "index.js")
+	is.NoErr(err)
+	is.Equal(string(code), `console.log('index')`)
+	code, err = fs.ReadFile(fsys, "favicon.ico")
+	is.NoErr(err)
+	is.Equal(code, favicon)
+}

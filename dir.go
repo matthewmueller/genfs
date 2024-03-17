@@ -16,7 +16,7 @@ type Dir struct {
 	tree   *tree
 }
 
-var _ Generators = (*Dir)(nil)
+var _ Interface = (*Dir)(nil)
 
 func (d *Dir) Target() string {
 	return d.target

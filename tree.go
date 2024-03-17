@@ -13,7 +13,7 @@ func newTree() *tree {
 	return &tree{
 		node: &node{
 			children:  map[string]*node{},
-			Generator: nil,
+			generator: nil,
 			Path:      ".",
 			Name:      ".",
 			Mode:      modeDir,
@@ -29,11 +29,12 @@ type tree struct {
 type node struct {
 	Path string // path from root
 	Name string // basename
-	Mode mode   // mode of the file
 
-	Generator generator
-	children  map[string]*node
-	parent    *node
+	Mode      mode // mode of the file
+	generator generator
+
+	children map[string]*node
+	parent   *node
 }
 
 func (n *node) Children() (children []*node) {
@@ -47,6 +48,11 @@ func (n *node) Children() (children []*node) {
 }
 
 func (t *tree) Insert(fpath string, mode mode, generator generator) {
+	if fpath == "." {
+		t.node.Mode = mode
+		t.node.generator = generator
+		return
+	}
 	segments := strings.Split(fpath, "/")
 	last := len(segments) - 1
 	name := segments[last]
@@ -56,7 +62,7 @@ func (t *tree) Insert(fpath string, mode mode, generator generator) {
 	if !found {
 		child = &node{
 			children:  map[string]*node{},
-			Generator: generator,
+			generator: generator,
 			Path:      fpath,
 			Name:      name,
 			Mode:      mode,
@@ -67,7 +73,7 @@ func (t *tree) Insert(fpath string, mode mode, generator generator) {
 	}
 	// Create or update the child's attributes
 	child.Mode = mode
-	child.Generator = generator
+	child.generator = generator
 }
 
 func (t *tree) mkdirAll(segments []string) *node {
@@ -77,7 +83,7 @@ func (t *tree) mkdirAll(segments []string) *node {
 		if !ok {
 			child = &node{
 				children:  map[string]*node{},
-				Generator: nil,
+				generator: nil,
 				Path:      path.Join(parent.Path, segment),
 				Name:      segment,
 				Mode:      modeDir,
@@ -90,8 +96,34 @@ func (t *tree) mkdirAll(segments []string) *node {
 	return parent
 }
 
-// Find an exact match the provided path
-func (t *tree) Find(path string) (n *node, ok bool) {
+type match struct {
+	Path      string
+	Generator generator
+	Mode      mode
+	children  map[string]*node
+}
+
+type matchChild struct {
+	Name string
+	Path string
+	Mode mode
+}
+
+func (m *match) Children() (children []*matchChild) {
+	for name, child := range m.children {
+		children = append(children, &matchChild{
+			Name: name,
+			Path: child.Path,
+			Mode: child.Mode,
+		})
+	}
+	sort.Slice(children, func(i, j int) bool {
+		return children[i].Name < children[j].Name
+	})
+	return children
+}
+
+func (t *tree) find(path string) (n *node, ok bool) {
 	// Special case to find the root node
 	if path == "." {
 		return t.node, true
@@ -108,8 +140,21 @@ func (t *tree) Find(path string) (n *node, ok bool) {
 	return node, true
 }
 
-// Get the closest match to the provided path
-func (t *tree) FindPrefix(path string) (n *node, ok bool) {
+// Find an exact match the provided path
+func (t *tree) Find(path string, accepts ...mode) (m *match, ok bool) {
+	node, ok := t.find(path)
+	if !ok {
+		return nil, false
+	}
+	return &match{
+		Path:      node.Path,
+		Generator: node.generator,
+		Mode:      node.Mode,
+		children:  node.children,
+	}, true
+}
+
+func (t *tree) findPrefix(path string) (n *node, ok bool) {
 	// Special case to find the root node
 	if path == "." {
 		return t.node, true
@@ -131,9 +176,23 @@ func (t *tree) FindPrefix(path string) (n *node, ok bool) {
 	return node, true
 }
 
+// Get the closest match to the provided path
+func (t *tree) FindPrefix(path string, accepts ...mode) (m *match, ok bool) {
+	node, ok := t.findPrefix(path)
+	if !ok {
+		return nil, false
+	}
+	return &match{
+		Path:      node.Path,
+		Generator: node.generator,
+		Mode:      node.Mode,
+		children:  node.children,
+	}, true
+}
+
 func (t *tree) Delete(paths ...string) {
 	for _, path := range paths {
-		if node, ok := t.Find(path); ok {
+		if node, ok := t.find(path); ok {
 			// We're trying to delete the root, ignore for now
 			if node.parent == nil {
 				continue
@@ -146,10 +205,10 @@ func (t *tree) Delete(paths ...string) {
 }
 
 func formatNode(node *node) string {
-	if node.Generator == nil {
+	if node.generator == nil {
 		return fmt.Sprintf("%s mode=%s", node.Name, node.Mode)
 	}
-	return fmt.Sprintf("%s mode=%s generator=%v", node.Name, node.Mode, node.Generator)
+	return fmt.Sprintf("%s mode=%s generator=%v", node.Name, node.Mode, node.generator)
 }
 
 func (t *tree) Print() string {
