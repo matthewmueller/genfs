@@ -652,6 +652,9 @@ func TestDynamicDir(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(len(des), 1)
 	is.Equal(des[0].Name(), "about.svelte")
+	code, err := fs.ReadFile(bfs, "bud/view/about/about.svelte")
+	is.NoErr(err)
+	is.Equal(string(code), "<h1>about/about.svelte</h1>")
 }
 
 func TestBases(t *testing.T) {
@@ -1171,9 +1174,7 @@ func TestDirMount(t *testing.T) {
 	))
 }
 
-// Mounts have priority over generators. It probably should be the other way
-// around, but it's not trivial to change so we'll avoid this situation for now.
-func TestDirMountPriority(t *testing.T) {
+func TestDirMountLowerPriority(t *testing.T) {
 	is := is.New(t)
 	bfs := genfs.New()
 	bfs.GenerateFile("bud/generator/service.json", func(fsys genfs.FS, file *genfs.File) error {
@@ -1195,7 +1196,7 @@ func TestDirMountPriority(t *testing.T) {
 	is.NoErr(err)
 	code, err := fs.ReadFile(bfs, "bud/generator/service.json")
 	is.NoErr(err)
-	is.Equal(string(code), `{"name":"mount service"}`)
+	is.Equal(string(code), `{"name":"generator service"}`)
 }
 
 func TestFilesWithinServe(t *testing.T) {
@@ -1298,7 +1299,6 @@ func (p *PublicDir) serveFile(fsys genfs.FS, file *genfs.File) error {
 }
 
 func TestServeShared(t *testing.T) {
-	t.Skip("wip")
 	is := is.New(t)
 	fsys := genfs.New()
 	fsys.Generator(&Preact{})
@@ -1309,6 +1309,102 @@ func TestServeShared(t *testing.T) {
 	code, err = fs.ReadFile(fsys, "index.js")
 	is.NoErr(err)
 	is.Equal(string(code), `console.log('index')`)
+	code, err = fs.ReadFile(fsys, "favicon.ico")
+	is.NoErr(err)
+	is.Equal(code, favicon)
+}
+
+type Svelte struct {
+}
+
+func (s *Svelte) GenerateDir(fsys genfs.FS, dir *genfs.Dir) error {
+	switch dir.Target() {
+	case "index.html":
+		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+			file.Write([]byte(`<h1>index</h1>`))
+			return nil
+		})
+	case "index.js":
+		dir.GenerateFile("index.js", func(fsys genfs.FS, file *genfs.File) error {
+			file.Write([]byte(`console.log('index')`))
+			return nil
+		})
+	}
+	return nil
+}
+
+type Static struct {
+}
+
+func (s *Static) GenerateDir(fsys genfs.FS, dir *genfs.Dir) error {
+	dir.GenerateFile("random.ico", func(fsys genfs.FS, file *genfs.File) error {
+		file.Write(favicon)
+		return nil
+	})
+	return nil
+}
+
+func TestDirShared(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New()
+	fsys.DirGenerator(".", &Svelte{})
+	fsys.DirGenerator(".", &Static{})
+	code, err := fs.ReadFile(fsys, "index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
+	code, err = fs.ReadFile(fsys, "index.js")
+	is.NoErr(err)
+	is.Equal(string(code), `console.log('index')`)
+	code, err = fs.ReadFile(fsys, "random.ico")
+	is.NoErr(err)
+	is.Equal(code, favicon)
+	des, err := fs.ReadDir(fsys, ".")
+	is.NoErr(err)
+	is.Equal(len(des), 3)
+	is.Equal(des[0].Name(), "index.html")
+	is.Equal(des[1].Name(), "index.js")
+	is.Equal(des[2].Name(), "random.ico")
+	is.NoErr(fstest.TestFS(fsys, "index.html", "index.js", "random.ico"))
+}
+
+func TestDirDuplicateLastWins(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New()
+	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+			file.Write([]byte(`<h1>index</h1>`))
+			return nil
+		})
+		return nil
+	})
+	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+			file.Write([]byte(`<h1>index2</h1>`))
+			return nil
+		})
+		return nil
+	})
+	code, err := fs.ReadFile(fsys, "index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index2</h1>`)
+	is.NoErr(fstest.TestFS(fsys, "index.html"))
+}
+
+func TestDirServeShared(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New()
+	fsys.DirGenerator(".", &Svelte{})
+	fsys.Generator(&PublicDir{})
+	fsys.DirGenerator(".", &Static{})
+	code, err := fs.ReadFile(fsys, "index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
+	code, err = fs.ReadFile(fsys, "index.js")
+	is.NoErr(err)
+	is.Equal(string(code), `console.log('index')`)
+	code, err = fs.ReadFile(fsys, "random.ico")
+	is.NoErr(err)
+	is.Equal(code, favicon)
 	code, err = fs.ReadFile(fsys, "favicon.ico")
 	is.NoErr(err)
 	is.Equal(code, favicon)

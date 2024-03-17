@@ -27,8 +27,8 @@ func (f *Session) Open(target string) (fs.File, error) {
 func (f *Session) openFrom(previous string, target string) (fs.File, error) {
 	// First look for an exact matching generator
 	match, found := f.tree.Find(target)
-	if found && match.Generator != nil {
-		file, err := match.Generator.Generate(f.Cache, target)
+	if found && match.Mode.IsGen() {
+		file, err := match.Generate(f.Cache, target)
 		if err != nil {
 			return nil, formatError(err, "open %q", target)
 		}
@@ -51,8 +51,8 @@ func (f *Session) openFrom(previous string, target string) (fs.File, error) {
 	}
 	// Lastly, try finding a node by its prefix
 	match, found = f.tree.FindPrefix(target)
-	if found && match.Path != previous && match.Mode.IsDir() && match.Generator != nil {
-		if file, err := match.Generator.Generate(f.Cache, target); nil == err {
+	if found && match.Path != previous && match.Mode.IsGenDir() {
+		if file, err := match.Generate(f.Cache, target); nil == err {
 			return wrapFile(file, f, match.Path), nil
 		} else if !errors.Is(err, fs.ErrNotExist) {
 			return nil, formatError(err, "open by prefix %q", target)
@@ -73,7 +73,7 @@ func (f *Session) ReadDir(target string) ([]fs.DirEntry, error) {
 		if match.Mode.IsGen() {
 			// Generate is expected to update the tree, that's why we don't use the
 			// returned file
-			if _, err := match.Generator.Generate(f.Cache, target); err != nil {
+			if _, err := match.Generate(f.Cache, target); err != nil {
 				return nil, err
 			}
 		}

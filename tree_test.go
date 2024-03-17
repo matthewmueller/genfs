@@ -141,25 +141,41 @@ func TestTreeRootDirGenerator(t *testing.T) {
 	is := is.New(t)
 	n := newTree()
 	n.Insert(".", modeGenDir, ag)
-	node, ok := n.FindPrefix("index.html")
+	match, ok := n.FindPrefix("index.html")
 	is.True(ok)
-	is.Equal(node.Path, ".")
-	is.True(node.Generator != nil)
+	is.Equal(match.Path, ".")
+	is.True(match.Mode.IsGen())
 	expect := `. mode=dg generator=a
 `
 	is.Equal(n.Print(), expect)
 }
 
-// func TestTreeRootSharedDirGenerator(t *testing.T) {
-// 	is := is.New(t)
-// 	n := newTree()
-// 	n.Insert(".", modeGenDir, ag)
-// 	n.Insert(".", modeGenDir, bg)
-// 	node, ok := n.FindPrefix("index.html")
-// 	is.True(ok)
-// 	is.Equal(node.Path, ".")
-// 	is.True(node.Generator != nil)
-// 	expect := `. mode=dg generator=a
-// `
-// 	is.Equal(n.Print(), expect)
-// }
+func TestTreeRootSharedDirGenerator(t *testing.T) {
+	is := is.New(t)
+	n := newTree()
+	n.Insert(".", modeGenDir, ag)
+	n.Insert(".", modeGenDir, bg)
+	match, ok := n.FindPrefix("index.html")
+	is.True(ok)
+	is.Equal(match.Path, ".")
+	is.True(match.Mode.IsGen())
+	expect := `. mode=dg generator=a,b
+`
+	is.Equal(n.Print(), expect)
+}
+
+func TestTreeFileGenOverride(t *testing.T) {
+	is := is.New(t)
+	n := newTree()
+	n.Insert("a", modeGenDir, ag)
+	n.Insert("a", modeGenDir, bg)
+	n.Insert("a", modeGen, cg)
+	match, ok := n.Find("a")
+	is.True(ok)
+	is.Equal(match.Path, "a")
+	is.True(match.Mode.IsGen())
+	expect := `. mode=d-
+└── a mode=-g generator=c
+`
+	is.Equal(n.Print(), expect)
+}

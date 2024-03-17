@@ -14,8 +14,16 @@ func (m mode) IsDir() bool {
 	return m&modeDir != 0
 }
 
+func (m mode) IsGenFile() bool {
+	return m == modeGen
+}
+
 func (m mode) IsGen() bool {
 	return m&modeGen != 0
+}
+
+func (m mode) IsGenDir() bool {
+	return m == modeGenDir
 }
 
 func (m mode) FileMode() fs.FileMode {

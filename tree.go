@@ -2,6 +2,7 @@ package genfs
 
 import (
 	"fmt"
+	"io/fs"
 	"path"
 	"sort"
 	"strings"
@@ -12,12 +13,12 @@ import (
 func newTree() *tree {
 	return &tree{
 		node: &node{
-			children:  map[string]*node{},
-			generator: nil,
-			Path:      ".",
-			Name:      ".",
-			Mode:      modeDir,
-			parent:    nil,
+			children:   map[string]*node{},
+			generators: nil,
+			Path:       ".",
+			Name:       ".",
+			Mode:       modeDir,
+			parent:     nil,
 		},
 	}
 }
@@ -30,8 +31,8 @@ type node struct {
 	Path string // path from root
 	Name string // basename
 
-	Mode      mode // mode of the file
-	generator generator
+	Mode       mode // mode of the file
+	generators []generator
 
 	children map[string]*node
 	parent   *node
@@ -47,10 +48,24 @@ func (n *node) Children() (children []*node) {
 	return children
 }
 
-func (t *tree) Insert(fpath string, mode mode, generator generator) {
+func shouldAppend(prevMode, nextMode mode) bool {
+	return prevMode.IsGenDir() && nextMode.IsGenDir()
+}
+
+func shouldReplace(prevMode, nextMode mode) bool {
+	return prevMode.IsDir() ||
+		(prevMode.IsGenDir() && nextMode.IsGenFile())
+}
+
+func (t *tree) Insert(fpath string, mode mode, gen generator) {
 	if fpath == "." {
-		t.node.Mode = mode
-		t.node.generator = generator
+		if shouldAppend(t.node.Mode, mode) {
+			t.node.Mode = mode
+			t.node.generators = append(t.node.generators, gen)
+		} else if shouldReplace(t.node.Mode, mode) {
+			t.node.Mode = mode
+			t.node.generators = []generator{gen}
+		}
 		return
 	}
 	segments := strings.Split(fpath, "/")
@@ -61,19 +76,25 @@ func (t *tree) Insert(fpath string, mode mode, generator generator) {
 	child, found := parent.children[name]
 	if !found {
 		child = &node{
-			children:  map[string]*node{},
-			generator: generator,
-			Path:      fpath,
-			Name:      name,
-			Mode:      mode,
-			parent:    parent,
+			children:   map[string]*node{},
+			generators: []generator{gen},
+			Path:       fpath,
+			Name:       name,
+			Mode:       mode,
+			parent:     parent,
 		}
 		// Add child to parent
 		parent.children[name] = child
+		return
 	}
 	// Create or update the child's attributes
-	child.Mode = mode
-	child.generator = generator
+	if shouldAppend(child.Mode, mode) {
+		child.Mode = mode
+		child.generators = append(child.generators, gen)
+	} else if shouldReplace(child.Mode, mode) {
+		child.Mode = mode
+		child.generators = []generator{gen}
+	}
 }
 
 func (t *tree) mkdirAll(segments []string) *node {
@@ -82,12 +103,12 @@ func (t *tree) mkdirAll(segments []string) *node {
 		child, ok := parent.children[segment]
 		if !ok {
 			child = &node{
-				children:  map[string]*node{},
-				generator: nil,
-				Path:      path.Join(parent.Path, segment),
-				Name:      segment,
-				Mode:      modeDir,
-				parent:    parent,
+				children:   map[string]*node{},
+				generators: nil,
+				Path:       path.Join(parent.Path, segment),
+				Name:       segment,
+				Mode:       modeDir,
+				parent:     parent,
 			}
 			parent.children[segment] = child
 		}
@@ -97,10 +118,19 @@ func (t *tree) mkdirAll(segments []string) *node {
 }
 
 type match struct {
-	Path      string
-	Generator generator
-	Mode      mode
-	children  map[string]*node
+	Path       string
+	generators []generator
+	Mode       mode
+	children   map[string]*node
+}
+
+func (m *match) Generate(cache Cache, target string) (fs.File, error) {
+	for i := len(m.generators) - 1; i >= 0; i-- {
+		if file, err := m.generators[i].Generate(cache, target); err == nil {
+			return file, nil
+		}
+	}
+	return nil, fs.ErrNotExist
 }
 
 type matchChild struct {
@@ -147,10 +177,10 @@ func (t *tree) Find(path string, accepts ...mode) (m *match, ok bool) {
 		return nil, false
 	}
 	return &match{
-		Path:      node.Path,
-		Generator: node.generator,
-		Mode:      node.Mode,
-		children:  node.children,
+		Path:       node.Path,
+		generators: node.generators,
+		Mode:       node.Mode,
+		children:   node.children,
 	}, true
 }
 
@@ -183,10 +213,10 @@ func (t *tree) FindPrefix(path string, accepts ...mode) (m *match, ok bool) {
 		return nil, false
 	}
 	return &match{
-		Path:      node.Path,
-		Generator: node.generator,
-		Mode:      node.Mode,
-		children:  node.children,
+		Path:       node.Path,
+		generators: node.generators,
+		Mode:       node.Mode,
+		children:   node.children,
 	}, true
 }
 
@@ -205,10 +235,14 @@ func (t *tree) Delete(paths ...string) {
 }
 
 func formatNode(node *node) string {
-	if node.generator == nil {
+	if node.generators == nil {
 		return fmt.Sprintf("%s mode=%s", node.Name, node.Mode)
 	}
-	return fmt.Sprintf("%s mode=%s generator=%v", node.Name, node.Mode, node.generator)
+	gens := make([]string, len(node.generators))
+	for i, gen := range node.generators {
+		gens[i] = fmt.Sprintf("%s", gen)
+	}
+	return fmt.Sprintf("%s mode=%s generator=%v", node.Name, node.Mode, strings.Join(gens, ","))
 }
 
 func (t *tree) Print() string {
