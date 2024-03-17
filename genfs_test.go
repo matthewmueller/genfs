@@ -2,6 +2,7 @@ package genfs_test
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -1232,4 +1233,15 @@ func TestFilesWithinServe(t *testing.T) {
 	code, err = fs.ReadFile(sfs, "bud/e/f.txt")
 	is.NoErr(err)
 	is.Equal(string(code), "e/f.txt")
+}
+
+func ExampleFS() {
+	fsys := genfs.New()
+	fsys.GenerateFile("a.txt", func(fsys genfs.FS, file *genfs.File) error {
+		file.WriteString("a")
+		return nil
+	})
+	code, _ := fs.ReadFile(fsys, "a.txt")
+	fmt.Println(string(code))
+	// Output: a
 }
