@@ -1,7 +1,6 @@
 package vtree
 
 import (
-	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -142,6 +141,7 @@ func (t *Tree) FindPrefix(fpath string) (*Match, bool) {
 			Path:       ".",
 			Mode:       t.root.Mode,
 			generators: t.root.Generators,
+			node:       t.root,
 		}, true
 	}
 	segments := strings.Split(fpath, "/")
@@ -155,6 +155,7 @@ func (t *Tree) FindPrefix(fpath string) (*Match, bool) {
 		Path:       path.Clean(prefix),
 		Mode:       node.Mode,
 		generators: node.Generators,
+		node:       node,
 	}, true
 }
 
@@ -165,6 +166,7 @@ func (t *Tree) Find(fpath string) (*Match, bool) {
 			Path:       ".",
 			Mode:       t.root.Mode,
 			generators: t.root.Generators,
+			node:       t.root,
 		}, true
 	}
 	segments := strings.Split(fpath, "/")
@@ -176,6 +178,7 @@ func (t *Tree) Find(fpath string) (*Match, bool) {
 		Path:       fpath,
 		Mode:       node.Mode,
 		generators: node.Generators,
+		node:       node,
 	}, true
 }
 
@@ -183,6 +186,7 @@ type Match struct {
 	Path       string
 	Mode       Mode
 	generators []Generator
+	node       *Node
 }
 
 func (m *Match) Generate(cache Cache, target string) (*virt.File, error) {
@@ -190,22 +194,22 @@ func (m *Match) Generate(cache Cache, target string) (*virt.File, error) {
 		Path: m.Path,
 		Mode: m.Mode.FileMode(),
 	}
-	des := map[string]fs.DirEntry{}
-	for _, generator := range m.generators {
-		file, err := generator.Generate(cache, target)
+	for i := len(m.generators) - 1; i >= 0; i-- {
+		file, err := m.generators[i].Generate(cache, target)
 		if err != nil {
-			if !errors.Is(err, fs.ErrNotExist) {
-				return nil, err
-			}
-			continue
+			return nil, err
 		}
-		vfile.Data = file.Data
-		for _, entry := range file.Entries {
-			des[entry.Name()] = entry
+		if file.IsDir() {
+			vfile.Entries = append(vfile.Entries, file.Entries...)
+		} else {
+			vfile.Data = file.Data
 		}
 	}
-	for _, entry := range des {
-		vfile.Entries = append(vfile.Entries, entry)
+	for _, child := range m.node.children {
+		vfile.Entries = append(vfile.Entries, &virt.File{
+			Path: path.Join(m.Path, child.Name),
+			Mode: child.Mode.FileMode(),
+		})
 	}
 	sort.Slice(vfile.Entries, func(i, j int) bool {
 		return vfile.Entries[i].Name() < vfile.Entries[j].Name()
@@ -311,7 +315,16 @@ func (n *Node) delete(segments []string) {
 }
 
 func (n *Node) Format() string {
-	return fmt.Sprintf("%s mode=%s generators=%v", n.Name, n.Mode, len(n.Generators))
+	s := new(strings.Builder)
+	s.WriteString(fmt.Sprintf("%s mode=%s", n.Name, n.Mode))
+	if len(n.Generators) > 0 {
+		generators := make([]string, len(n.Generators))
+		for i, generator := range n.Generators {
+			generators[i] = fmt.Sprintf("%v", generator)
+		}
+		s.WriteString(fmt.Sprintf(" generators=%s", strings.Join(generators, ",")))
+	}
+	return s.String()
 }
 
 func (n *Node) Children() []*Node {

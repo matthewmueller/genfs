@@ -22,7 +22,7 @@ func TestError(t *testing.T) {
 func TestNew(t *testing.T) {
 	is := is.New(t)
 	tree := vtree.New()
-	is.Equal(tree.Print(), `. mode=d- generators=0
+	is.Equal(tree.Print(), `. mode=d-
 `)
 }
 
@@ -30,6 +30,10 @@ type treeGenerator struct{ label string }
 
 func (g *treeGenerator) Generate(cache vtree.Cache, target string) (*virt.File, error) {
 	return nil, fs.ErrNotExist
+}
+
+func (g *treeGenerator) String() string {
+	return g.label
 }
 
 var ag = &treeGenerator{"a"}
@@ -41,11 +45,11 @@ var fg = &treeGenerator{"f"}
 func TestSimpleGenerateFile(t *testing.T) {
 	is := is.New(t)
 	tree := vtree.New()
-	is.NoErr(tree.GenerateFile("a/b/c", ag))
-	expect := `. mode=d- generators=0
-└── a mode=d- generators=0
-    └── b mode=d- generators=0
-        └── c mode=-g generators=1
+	is.NoErr(tree.GenerateFile("a/b/c", cg))
+	expect := `. mode=d-
+└── a mode=d-
+    └── b mode=d-
+        └── c mode=-g generators=c
 `
 	is.Equal(tree.Print(), expect)
 }
@@ -54,7 +58,7 @@ func TestRootDir(t *testing.T) {
 	is := is.New(t)
 	tree := vtree.New()
 	is.NoErr(tree.GenerateDir(".", ag))
-	expect := `. mode=dg generators=1
+	expect := `. mode=dg generators=a
 `
 	is.Equal(tree.Print(), expect)
 }
@@ -63,8 +67,8 @@ func TestSimpleGenerateDir(t *testing.T) {
 	is := is.New(t)
 	tree := vtree.New()
 	is.NoErr(tree.GenerateDir("a", ag))
-	expect := `. mode=d- generators=0
-└── a mode=dg generators=1
+	expect := `. mode=d-
+└── a mode=dg generators=a
 `
 	is.Equal(tree.Print(), expect)
 }
@@ -77,12 +81,12 @@ func TestSampleGen(t *testing.T) {
 	is.NoErr(tree.GenerateDir("b/c", cg))
 	is.NoErr(tree.GenerateFile("b/c/e", eg))
 	is.NoErr(tree.GenerateFile("b/c/f", fg))
-	expect := `. mode=d- generators=0
-├── a mode=-g generators=1
-└── b mode=dg generators=1
-    └── c mode=dg generators=1
-        ├── e mode=-g generators=1
-        └── f mode=-g generators=1
+	expect := `. mode=d-
+├── a mode=-g generators=a
+└── b mode=dg generators=b
+    └── c mode=dg generators=c
+        ├── e mode=-g generators=e
+        └── f mode=-g generators=f
 `
 	is.Equal(tree.Print(), expect)
 }
@@ -94,12 +98,12 @@ func TestTreeFiller(t *testing.T) {
 	is.NoErr(tree.GenerateFile("b/c/e", eg))
 	is.NoErr(tree.GenerateFile("b/c/f", fg))
 	is.NoErr(tree.GenerateDir("b/c", cg))
-	expect := `. mode=d- generators=0
-├── a mode=-g generators=1
-└── b mode=d- generators=0
-    └── c mode=dg generators=1
-        ├── e mode=-g generators=1
-        └── f mode=-g generators=1
+	expect := `. mode=d-
+├── a mode=-g generators=a
+└── b mode=d-
+    └── c mode=dg generators=c
+        ├── e mode=-g generators=e
+        └── f mode=-g generators=f
 `
 	is.Equal(tree.Print(), expect)
 }
@@ -143,9 +147,9 @@ func TestTreeDelete(t *testing.T) {
 	is.NoErr(tree.GenerateFile("b/c/e", eg))
 	is.NoErr(tree.GenerateFile("b/c/f", fg))
 	tree.Delete("b/c")
-	expect := `. mode=d- generators=0
-├── a mode=-g generators=1
-└── b mode=dg generators=1
+	expect := `. mode=d-
+├── a mode=-g generators=a
+└── b mode=dg generators=b
 `
 	is.Equal(tree.Print(), expect)
 }
@@ -186,21 +190,32 @@ func TestTreeRootDirGenerator(t *testing.T) {
 	is.True(ok)
 	is.Equal(match.Path, ".")
 	is.True(match.Mode.IsGen())
-	expect := `. mode=dg generators=1
+	expect := `. mode=dg generators=a
 `
 	is.Equal(tree.Print(), expect)
 }
 
-type Func func(cache vtree.Cache, target string) (*virt.File, error)
+func Func(label string, fn func(cache vtree.Cache, target string) (*virt.File, error)) vtree.Generator {
+	return &funcGenerator{label, fn}
+}
 
-func (f Func) Generate(cache vtree.Cache, target string) (*virt.File, error) {
-	return f(cache, target)
+type funcGenerator struct {
+	label string
+	fn    func(cache vtree.Cache, target string) (*virt.File, error)
+}
+
+func (g *funcGenerator) Generate(cache vtree.Cache, target string) (*virt.File, error) {
+	return g.fn(cache, target)
+}
+
+func (g *funcGenerator) String() string {
+	return g.label
 }
 
 func TestTreeSharedDirGenerator(t *testing.T) {
 	is := is.New(t)
 	tree := vtree.New()
-	is.NoErr(tree.GenerateDir(".", Func(func(cache vtree.Cache, target string) (*virt.File, error) {
+	is.NoErr(tree.GenerateDir(".", Func("a", func(cache vtree.Cache, target string) (*virt.File, error) {
 		return &virt.File{
 			Path: ".",
 			Mode: fs.ModeDir,
@@ -210,7 +225,7 @@ func TestTreeSharedDirGenerator(t *testing.T) {
 			},
 		}, nil
 	})))
-	is.NoErr(tree.GenerateDir(".", Func(func(cache vtree.Cache, target string) (*virt.File, error) {
+	is.NoErr(tree.GenerateDir(".", Func("b", func(cache vtree.Cache, target string) (*virt.File, error) {
 		return &virt.File{
 			Path: ".",
 			Mode: fs.ModeDir,
@@ -223,7 +238,7 @@ func TestTreeSharedDirGenerator(t *testing.T) {
 	is.True(ok)
 	is.Equal(match.Path, ".")
 	is.True(match.Mode.IsGenDir())
-	expect := `. mode=dg generators=2
+	expect := `. mode=dg generators=a,b
 `
 	is.Equal(tree.Print(), expect)
 	vfile, err := match.Generate(nil, ".")
@@ -242,24 +257,55 @@ func TestTreeSharedDirGenerator(t *testing.T) {
 func TestTreeSharedDirAndDirGenerator(t *testing.T) {
 	is := is.New(t)
 	tree := vtree.New()
-	is.NoErr(tree.GenerateFile("favicon.ico", Func(func(cache vtree.Cache, target string) (*virt.File, error) {
-		return &virt.File{}, nil
+	is.NoErr(tree.GenerateFile("favicon.ico", Func("a", func(cache vtree.Cache, target string) (*virt.File, error) {
+		return &virt.File{
+			Path: target,
+			Data: []byte("favicon.ico"),
+		}, nil
 	})))
-	tree.GenerateDir(".", Func(func(cache vtree.Cache, target string) (*virt.File, error) {
-		return &virt.File{}, nil
+	tree.GenerateDir(".", Func("b", func(cache vtree.Cache, target string) (*virt.File, error) {
+		return &virt.File{
+			Path: ".",
+			Mode: fs.ModeDir,
+			Entries: []fs.DirEntry{
+				&virt.File{Path: "index.html", Data: []byte("<h1>index</h1>")},
+				&virt.File{Path: "about.html", Data: []byte("<h1>about</h1>")},
+			},
+		}, nil
 	}))
-	tree.GenerateDir(".", Func(func(cache vtree.Cache, target string) (*virt.File, error) {
-		return &virt.File{}, nil
+	tree.GenerateDir(".", Func("c", func(cache vtree.Cache, target string) (*virt.File, error) {
+		return &virt.File{
+			Path: ".",
+			Mode: fs.ModeDir,
+			Entries: []fs.DirEntry{
+				&virt.File{Path: "about.js", Data: []byte("console.log('about')")},
+				&virt.File{Path: "random_dir", Mode: fs.ModeDir},
+			},
+		}, nil
 	}))
 	match, ok := tree.FindPrefix("index.html")
 	is.True(ok)
 	is.Equal(match.Path, ".")
 	is.True(match.Mode.IsGenDir())
-	expect := `. mode=dg generators=2
-└── favicon.ico mode=-g generators=1
+	expect := `. mode=dg generators=b,c
+└── favicon.ico mode=-g generators=a
 `
 	is.Equal(tree.Print(), expect)
-
+	vfile, err := match.Generate(nil, ".")
+	is.NoErr(err)
+	is.Equal(vfile.Path, ".")
+	is.True(vfile.Mode.IsDir())
+	is.Equal(len(vfile.Entries), 5)
+	is.Equal(vfile.Entries[0].Name(), "about.html")
+	is.True(!vfile.Entries[0].IsDir())
+	is.Equal(vfile.Entries[1].Name(), "about.js")
+	is.True(!vfile.Entries[1].IsDir())
+	is.Equal(vfile.Entries[2].Name(), "favicon.ico")
+	is.True(!vfile.Entries[2].IsDir())
+	is.Equal(vfile.Entries[3].Name(), "index.html")
+	is.True(!vfile.Entries[3].IsDir())
+	is.Equal(vfile.Entries[4].Name(), "random_dir")
+	is.True(vfile.Entries[4].IsDir())
 }
 
 func TestTreeGenDirFileGenOverride(t *testing.T) {
@@ -274,8 +320,8 @@ func TestTreeGenDirFileGenOverride(t *testing.T) {
 	is.True(ok)
 	is.Equal(match.Path, "a")
 	is.True(match.Mode.IsGen())
-	expect := `. mode=d- generators=0
-└── a mode=dg generators=2
+	expect := `. mode=d-
+└── a mode=dg generators=a,b
 `
 	is.Equal(tree.Print(), expect)
 }
@@ -283,13 +329,13 @@ func TestTreeGenDirFileGenOverride(t *testing.T) {
 func TestTreeFileGenOverride(t *testing.T) {
 	is := is.New(t)
 	tree := vtree.New()
-	is.NoErr(tree.GenerateFile("a.txt", Func(func(cache vtree.Cache, target string) (*virt.File, error) {
+	is.NoErr(tree.GenerateFile("a.txt", Func("a", func(cache vtree.Cache, target string) (*virt.File, error) {
 		return &virt.File{
 			Path: target,
 			Data: []byte("1"),
 		}, nil
 	})))
-	is.NoErr(tree.GenerateFile("a.txt", Func(func(cache vtree.Cache, target string) (*virt.File, error) {
+	is.NoErr(tree.GenerateFile("a.txt", Func("b", func(cache vtree.Cache, target string) (*virt.File, error) {
 		return &virt.File{
 			Path: target,
 			Data: []byte("2"),
@@ -299,8 +345,8 @@ func TestTreeFileGenOverride(t *testing.T) {
 	is.True(ok)
 	is.Equal(match.Path, "a.txt")
 	is.True(match.Mode.IsGen())
-	expect := `. mode=d- generators=0
-└── a.txt mode=-g generators=1
+	expect := `. mode=d-
+└── a.txt mode=-g generators=b
 `
 	is.Equal(tree.Print(), expect)
 	vfile, err := match.Generate(nil, "a.txt")
@@ -308,4 +354,61 @@ func TestTreeFileGenOverride(t *testing.T) {
 	is.Equal(vfile.Path, "a.txt")
 	is.True(vfile.Mode.IsRegular())
 	is.Equal(string(vfile.Data), "2")
+}
+
+func TestDynamic(t *testing.T) {
+	is := is.New(t)
+	tree := vtree.New()
+	is.NoErr(tree.GenerateDir("bud", Func("a", func(cache vtree.Cache, target string) (*virt.File, error) {
+		err := tree.GenerateDir("bud/docs", Func("b", func(cache vtree.Cache, target string) (*virt.File, error) {
+			err := tree.GenerateFile("bud/docs/a.txt", Func("c", func(cache vtree.Cache, target string) (*virt.File, error) {
+				return &virt.File{
+					Path: target,
+					Data: []byte("1"),
+				}, nil
+			}))
+			return &virt.File{}, err
+		}))
+		return &virt.File{}, err
+	})))
+	match, ok := tree.FindPrefix("bud/docs/a.txt")
+	is.True(ok)
+	is.Equal(match.Path, "bud")
+	vfile, err := match.Generate(nil, "bud/docs/a.txt")
+	is.NoErr(err)
+	is.Equal(vfile.Path, "bud")
+	is.True(vfile.Mode.IsDir())
+	is.Equal(len(vfile.Entries), 1)
+	is.Equal(vfile.Entries[0].Name(), "docs")
+	is.True(vfile.Entries[0].IsDir())
+
+	// Try again now that we've discovered bud/docs
+	match, ok = tree.FindPrefix("bud/docs/a.txt")
+	is.True(ok)
+	is.Equal(match.Path, "bud/docs")
+	vfile, err = match.Generate(nil, "bud/docs/a.txt")
+	is.NoErr(err)
+	is.Equal(vfile.Path, "bud/docs")
+	is.True(vfile.Mode.IsDir())
+	is.Equal(len(vfile.Entries), 1)
+	is.Equal(vfile.Entries[0].Name(), "a.txt")
+	is.True(!vfile.Entries[0].IsDir())
+
+	// Try again now that we've discovered bud/docs/a.txt
+	match, ok = tree.Find("bud/docs/a.txt")
+	is.True(ok)
+	is.Equal(match.Path, "bud/docs/a.txt")
+	is.True(match.Mode.IsGen())
+	vfile, err = match.Generate(nil, "bud/docs/a.txt")
+	is.NoErr(err)
+	is.Equal(vfile.Path, "bud/docs/a.txt")
+	is.True(vfile.Mode.IsRegular())
+	is.Equal(string(vfile.Data), "1")
+	is.Equal(len(vfile.Entries), 0)
+
+	is.Equal(tree.Print(), `. mode=d-
+└── bud mode=dg generators=a
+    └── docs mode=dg generators=b
+        └── a.txt mode=-g generators=c
+`)
 }
