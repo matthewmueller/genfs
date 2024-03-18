@@ -26,7 +26,7 @@ type FS interface {
 }
 
 type generator interface {
-	Generate(cache Cache, target string) (fs.File, error)
+	Generate(cache Cache, target string) (*virt.File, error)
 }
 
 func New() *FileSystem {
@@ -96,7 +96,7 @@ func (f *FileSystem) Open(target string) (fs.File, error) {
 	return f.session.Open(target)
 }
 
-func (f *FileSystem) openFrom(previous string, target string) (fs.File, error) {
+func (f *FileSystem) openFrom(previous string, target string) (*virt.File, error) {
 	return f.session.openFrom(previous, target)
 }
 

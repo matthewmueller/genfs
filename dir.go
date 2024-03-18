@@ -1,7 +1,6 @@
 package genfs
 
 import (
-	"fmt"
 	"io/fs"
 	gopath "path"
 
@@ -73,37 +72,41 @@ func (d *Dir) ExternalGenerator(path string, generator ExternalGenerator) {
 	d.GenerateExternal(path, generator.GenerateExternal)
 }
 
-type mountGenerator struct {
-	dir   string
-	mount fs.FS
-}
+// type mountGenerator struct {
+// 	dir   string
+// 	mount fs.FS
+// }
 
-func (g *mountGenerator) Generate(cache Cache, target string) (fs.File, error) {
-	return g.mount.Open(relativePath(g.dir, target))
-}
+// func (g *mountGenerator) Generate(cache Cache, target string) (*virt.File, error) {
+// 	file, err := g.mount.Open(relativePath(g.dir, target))
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return virt.From(file)
+// }
 
-func (d *Dir) Mount(mount fs.FS) error {
-	err := fs.WalkDir(mount, ".", func(path string, de fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		// Don't overwrite the existing root directory
-		if path == "." {
-			return nil
-		}
-		fpath := gopath.Join(d.path, path)
-		mode := modeGen
-		if de.IsDir() {
-			mode = modeGenDir
-		}
-		d.tree.Insert(fpath, mode, &mountGenerator{d.path, mount})
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("budfs: mount error. %w", err)
-	}
-	return nil
-}
+// func (d *Dir) Mount(mount fs.FS) error {
+// 	err := fs.WalkDir(mount, ".", func(path string, de fs.DirEntry, err error) error {
+// 		if err != nil {
+// 			return err
+// 		}
+// 		// Don't overwrite the existing root directory
+// 		if path == "." {
+// 			return nil
+// 		}
+// 		fpath := gopath.Join(d.path, path)
+// 		mode := modeGen
+// 		if de.IsDir() {
+// 			mode = modeGenDir
+// 		}
+// 		d.tree.Insert(fpath, mode, &mountGenerator{d.path, mount})
+// 		return nil
+// 	})
+// 	if err != nil {
+// 		return fmt.Errorf("budfs: mount error. %w", err)
+// 	}
+// 	return nil
+// }
 
 type DirGenerator interface {
 	GenerateDir(fsys FS, dir *Dir) error
@@ -122,9 +125,10 @@ type dirGenerator struct {
 	fn    func(fsys FS, dir *Dir) error
 }
 
-func (d *dirGenerator) Generate(cache Cache, target string) (fs.File, error) {
-	if entry, err := cache.Get(d.path); err == nil {
-		return wrapFile(virt.Open(entry), d.genfs, d.path), nil
+func (d *dirGenerator) Generate(cache Cache, target string) (*virt.File, error) {
+	if vfile, err := cache.Get(d.path); err == nil {
+		return vfile, nil
+		// return wrapFile(virt.Open(entry), d.genfs, d.path), nil
 	}
 	// Run the directory generator function
 	scopedFS := &scopedFS{cache, d.genfs, d.path}
@@ -136,15 +140,15 @@ func (d *dirGenerator) Generate(cache Cache, target string) (fs.File, error) {
 	if d.path != target {
 		return d.genfs.openFrom(d.path, target)
 	}
-	entry := &virt.File{
+	vfile := &virt.File{
 		Path:    d.path,
 		Mode:    fs.ModeDir,
 		Entries: nil, // Entries get filled in on-demand.
 	}
 	// Cache the directory entry
-	if err := cache.Set(d.path, entry); err != nil {
+	if err := cache.Set(d.path, vfile); err != nil {
 		return nil, err
 	}
 	// Return the virtual directory
-	return wrapFile(virt.Open(entry), d.genfs, d.path), nil
+	return vfile, nil
 }

@@ -1094,110 +1094,110 @@ func TestExternal(t *testing.T) {
 	is.Equal(string(code), "my app")
 }
 
-func TestDirMount(t *testing.T) {
-	is := is.New(t)
-	bfs := genfs.New()
-	mount := genfs.New()
-	called := map[string]int{}
-	mount.GenerateFile("tailwind/tailwind.go", func(fsys genfs.FS, file *genfs.File) error {
-		called[file.Path()]++
-		file.Write([]byte("package tailwind"))
-		return nil
-	})
-	mount.GenerateFile("html/html.go", func(fsys genfs.FS, file *genfs.File) error {
-		called[file.Path()]++
-		file.Write([]byte("package html"))
-		return nil
-	})
-	mount.GenerateFile("service.json", func(fsys genfs.FS, file *genfs.File) error {
-		called[file.Path()]++
-		file.Write([]byte(`{"name":"service"}`))
-		return nil
-	})
-	bfs.GenerateDir("bud/generator", func(fsys genfs.FS, dir *genfs.Dir) error {
-		called[dir.Path()]++
-		return dir.Mount(mount)
-	})
+// func TestDirMount(t *testing.T) {
+// 	is := is.New(t)
+// 	bfs := genfs.New()
+// 	mount := genfs.New()
+// 	called := map[string]int{}
+// 	mount.GenerateFile("tailwind/tailwind.go", func(fsys genfs.FS, file *genfs.File) error {
+// 		called[file.Path()]++
+// 		file.Write([]byte("package tailwind"))
+// 		return nil
+// 	})
+// 	mount.GenerateFile("html/html.go", func(fsys genfs.FS, file *genfs.File) error {
+// 		called[file.Path()]++
+// 		file.Write([]byte("package html"))
+// 		return nil
+// 	})
+// 	mount.GenerateFile("service.json", func(fsys genfs.FS, file *genfs.File) error {
+// 		called[file.Path()]++
+// 		file.Write([]byte(`{"name":"service"}`))
+// 		return nil
+// 	})
+// 	bfs.GenerateDir("bud/generator", func(fsys genfs.FS, dir *genfs.Dir) error {
+// 		called[dir.Path()]++
+// 		return dir.Mount(mount)
+// 	})
 
-	des, err := fs.ReadDir(bfs, "bud")
-	is.NoErr(err)
-	is.Equal(len(des), 1)
-	is.Equal(des[0].Name(), "generator")
-	stat, err := des[0].Info()
-	is.NoErr(err)
-	is.True(stat.IsDir())
-	is.Equal(stat.Name(), "generator")
+// 	des, err := fs.ReadDir(bfs, "bud")
+// 	is.NoErr(err)
+// 	is.Equal(len(des), 1)
+// 	is.Equal(des[0].Name(), "generator")
+// 	stat, err := des[0].Info()
+// 	is.NoErr(err)
+// 	is.True(stat.IsDir())
+// 	is.Equal(stat.Name(), "generator")
 
-	generator, err := bfs.Open("bud/generator")
-	is.NoErr(err)
-	fi, err := generator.Stat()
-	is.NoErr(err)
-	is.Equal(fi.Name(), "generator")
-	is.True(fi.IsDir())
-	is.NoErr(generator.Close())
+// 	generator, err := bfs.Open("bud/generator")
+// 	is.NoErr(err)
+// 	fi, err := generator.Stat()
+// 	is.NoErr(err)
+// 	is.Equal(fi.Name(), "generator")
+// 	is.True(fi.IsDir())
+// 	is.NoErr(generator.Close())
 
-	// Read the dir that mounts the filesystem
-	des, err = fs.ReadDir(bfs, "bud/generator")
-	is.NoErr(err)
-	is.Equal(len(des), 3)
+// 	// Read the dir that mounts the filesystem
+// 	des, err = fs.ReadDir(bfs, "bud/generator")
+// 	is.NoErr(err)
+// 	is.Equal(len(des), 3)
 
-	// No mounted generators should have been called despite walking the mounted fs
-	is.Equal(called["bud/generator"], 3)        // bud/generator
-	is.Equal(called["tailwind/tailwind.go"], 0) // tailwind/tailwind.go
-	is.Equal(called["html/html.go"], 0)         // html/html.go
-	is.Equal(called["service.json"], 0)         // service.json
+// 	// No mounted generators should have been called despite walking the mounted fs
+// 	is.Equal(called["bud/generator"], 3)        // bud/generator
+// 	is.Equal(called["tailwind/tailwind.go"], 0) // tailwind/tailwind.go
+// 	is.Equal(called["html/html.go"], 0)         // html/html.go
+// 	is.Equal(called["service.json"], 0)         // service.json
 
-	// Read a virtual dir within the mounted dir
-	des, err = fs.ReadDir(bfs, "bud/generator/tailwind")
-	is.NoErr(err)
-	is.Equal(len(des), 1)
-	// No mounted generators should have been called
-	is.Equal(called["bud/generator"], 3)        // bud/generator
-	is.Equal(called["tailwind/tailwind.go"], 0) // tailwind/tailwind.go
-	is.Equal(called["html/html.go"], 0)         // html/html.go
-	is.Equal(called["service.json"], 0)         // service.json
+// 	// Read a virtual dir within the mounted dir
+// 	des, err = fs.ReadDir(bfs, "bud/generator/tailwind")
+// 	is.NoErr(err)
+// 	is.Equal(len(des), 1)
+// 	// No mounted generators should have been called
+// 	is.Equal(called["bud/generator"], 3)        // bud/generator
+// 	is.Equal(called["tailwind/tailwind.go"], 0) // tailwind/tailwind.go
+// 	is.Equal(called["html/html.go"], 0)         // html/html.go
+// 	is.Equal(called["service.json"], 0)         // service.json
 
-	// Directly read a generated file within the mounted dir
-	code, err := fs.ReadFile(bfs, "bud/generator/tailwind/tailwind.go")
-	is.NoErr(err)
-	is.Equal(string(code), "package tailwind")
-	// Tailwind.go should have been called
-	is.Equal(called["bud/generator"], 3)        // bud/generator
-	is.Equal(called["tailwind/tailwind.go"], 1) // tailwind/tailwind.go
-	is.Equal(called["html/html.go"], 0)         // html/html.go
-	is.Equal(called["service.json"], 0)         // service.json
+// 	// Directly read a generated file within the mounted dir
+// 	code, err := fs.ReadFile(bfs, "bud/generator/tailwind/tailwind.go")
+// 	is.NoErr(err)
+// 	is.Equal(string(code), "package tailwind")
+// 	// Tailwind.go should have been called
+// 	is.Equal(called["bud/generator"], 3)        // bud/generator
+// 	is.Equal(called["tailwind/tailwind.go"], 1) // tailwind/tailwind.go
+// 	is.Equal(called["html/html.go"], 0)         // html/html.go
+// 	is.Equal(called["service.json"], 0)         // service.json
 
-	is.NoErr(fstest.TestFS(bfs,
-		"bud/generator/tailwind/tailwind.go",
-		"bud/generator/html/html.go",
-		"bud/generator/service.json",
-	))
-}
+// 	is.NoErr(fstest.TestFS(bfs,
+// 		"bud/generator/tailwind/tailwind.go",
+// 		"bud/generator/html/html.go",
+// 		"bud/generator/service.json",
+// 	))
+// }
 
-func TestDirMountLowerPriority(t *testing.T) {
-	is := is.New(t)
-	bfs := genfs.New()
-	bfs.GenerateFile("bud/generator/service.json", func(fsys genfs.FS, file *genfs.File) error {
-		file.Write([]byte(`{"name":"generator service"}`))
-		return nil
-	})
-	bfs.GenerateDir("bud/generator", func(fsys genfs.FS, dir *genfs.Dir) error {
-		return dir.Mount(&virt.Tree{
-			"tailwind/tailwind.go": &virt.File{Data: []byte("package tailwind")},
-			"html/html.go":         &virt.File{Data: []byte("package html")},
-			"service.json":         &virt.File{Data: []byte(`{"name":"mount service"}`)},
-		})
-	})
-	err := fstest.TestFS(bfs,
-		"bud/generator/tailwind/tailwind.go",
-		"bud/generator/html/html.go",
-		"bud/generator/service.json",
-	)
-	is.NoErr(err)
-	code, err := fs.ReadFile(bfs, "bud/generator/service.json")
-	is.NoErr(err)
-	is.Equal(string(code), `{"name":"generator service"}`)
-}
+// func TestDirMountLowerPriority(t *testing.T) {
+// 	is := is.New(t)
+// 	bfs := genfs.New()
+// 	bfs.GenerateFile("bud/generator/service.json", func(fsys genfs.FS, file *genfs.File) error {
+// 		file.Write([]byte(`{"name":"generator service"}`))
+// 		return nil
+// 	})
+// 	bfs.GenerateDir("bud/generator", func(fsys genfs.FS, dir *genfs.Dir) error {
+// 		return dir.Mount(&virt.Tree{
+// 			"tailwind/tailwind.go": &virt.File{Data: []byte("package tailwind")},
+// 			"html/html.go":         &virt.File{Data: []byte("package html")},
+// 			"service.json":         &virt.File{Data: []byte(`{"name":"mount service"}`)},
+// 		})
+// 	})
+// 	err := fstest.TestFS(bfs,
+// 		"bud/generator/tailwind/tailwind.go",
+// 		"bud/generator/html/html.go",
+// 		"bud/generator/service.json",
+// 	)
+// 	is.NoErr(err)
+// 	code, err := fs.ReadFile(bfs, "bud/generator/service.json")
+// 	is.NoErr(err)
+// 	is.Equal(string(code), `{"name":"generator service"}`)
+// }
 
 func TestFilesWithinServe(t *testing.T) {
 	is := is.New(t)

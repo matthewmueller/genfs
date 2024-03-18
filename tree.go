@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/matthewmueller/virt"
 	"github.com/xlab/treeprint"
 )
 
@@ -124,7 +125,7 @@ type match struct {
 	children   map[string]*node
 }
 
-func (m *match) Generate(cache Cache, target string) (fs.File, error) {
+func (m *match) Generate(cache Cache, target string) (*virt.File, error) {
 	for i := len(m.generators) - 1; i >= 0; i-- {
 		if file, err := m.generators[i].Generate(cache, target); err == nil {
 			return file, nil

@@ -21,39 +21,42 @@ func (f *Session) Open(target string) (fs.File, error) {
 	if !fs.ValidPath(target) {
 		return nil, formatError(fs.ErrInvalid, "invalid target path %q", target)
 	}
-	return f.openFrom("", target)
+	vfile, err := f.openFrom("", target)
+	if err != nil {
+		return nil, err
+	}
+	return wrapFile(virt.Open(vfile), f, vfile.Path), nil
 }
 
-func (f *Session) openFrom(previous string, target string) (fs.File, error) {
+func (f *Session) openFrom(previous string, target string) (*virt.File, error) {
 	// First look for an exact matching generator
 	match, found := f.tree.Find(target)
 	if found && match.Mode.IsGen() {
-		file, err := match.Generate(f.Cache, target)
+		vfile, err := match.Generate(f.Cache, target)
 		if err != nil {
 			return nil, formatError(err, "open %q", target)
 		}
-		return wrapFile(file, f, match.Path), nil
+		return vfile, nil
 	}
 	// Next try opening the file from the fallback filesystem
 	if file, err := f.FS.Open(target); nil == err {
-		return wrapFile(file, f, target), nil
+		return virt.From(file)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return nil, formatError(err, "open %q", target)
 	}
 	// Next, if we did find a generator node above, return it now. It'll be a
 	// filler directory, not a generator.
 	if found && match.Mode.IsDir() {
-		dir := virt.Open(&virt.File{
+		return &virt.File{
 			Path: target,
 			Mode: match.Mode.FileMode(),
-		})
-		return wrapFile(dir, f, match.Path), nil
+		}, nil
 	}
 	// Lastly, try finding a node by its prefix
 	match, found = f.tree.FindPrefix(target)
 	if found && match.Path != previous && match.Mode.IsGenDir() {
-		if file, err := match.Generate(f.Cache, target); nil == err {
-			return wrapFile(file, f, match.Path), nil
+		if vfile, err := match.Generate(f.Cache, target); nil == err {
+			return vfile, nil
 		} else if !errors.Is(err, fs.ErrNotExist) {
 			return nil, formatError(err, "open by prefix %q", target)
 		}

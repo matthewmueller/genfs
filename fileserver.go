@@ -25,16 +25,16 @@ type fileServer struct {
 
 var _ generator = (*fileServer)(nil)
 
-func (f *fileServer) Generate(cache Cache, target string) (fs.File, error) {
-	if file, err := cache.Get(target); err == nil {
-		return virt.Open(file), nil
+func (f *fileServer) Generate(cache Cache, target string) (*virt.File, error) {
+	if vfile, err := cache.Get(target); err == nil {
+		return vfile, nil
 	}
 	// Always return an empty directory if we request the root
 	if f.path == target {
-		return virt.Open(&virt.File{
+		return &virt.File{
 			Path: f.path,
 			Mode: fs.ModeDir,
-		}), nil
+		}, nil
 	}
 	scopedFS := &scopedFS{cache, f.genfs, target}
 	file := &File{new(bytes.Buffer), f.path, target}
@@ -49,5 +49,5 @@ func (f *fileServer) Generate(cache Cache, target string) (fs.File, error) {
 	if err := cache.Set(target, vfile); err != nil {
 		return nil, err
 	}
-	return virt.Open(vfile), nil
+	return vfile, nil
 }

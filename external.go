@@ -32,7 +32,7 @@ type externalGenerator struct {
 	fn    func(fsys FS, e *External) error
 }
 
-func (e *externalGenerator) Generate(cache Cache, target string) (fs.File, error) {
+func (e *externalGenerator) Generate(cache Cache, target string) (*virt.File, error) {
 	if target != e.path {
 		return nil, formatError(fs.ErrNotExist, "%q path doesn't match %q target", e.path, target)
 	}
