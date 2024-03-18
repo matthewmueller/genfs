@@ -3,6 +3,7 @@ package genfs
 import (
 	"io/fs"
 
+	"github.com/matthewmueller/genfs/internal/vtree"
 	"github.com/matthewmueller/virt"
 )
 
@@ -32,7 +33,7 @@ type externalGenerator struct {
 	fn    func(fsys FS, e *External) error
 }
 
-func (e *externalGenerator) Generate(cache Cache, target string) (*virt.File, error) {
+func (e *externalGenerator) Generate(cache vtree.Cache, target string) (*virt.File, error) {
 	if target != e.path {
 		return nil, formatError(fs.ErrNotExist, "%q path doesn't match %q target", e.path, target)
 	}

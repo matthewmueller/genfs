@@ -190,6 +190,15 @@ type Match struct {
 }
 
 func (m *Match) Generate(cache Cache, target string) (*virt.File, error) {
+	// Comment this out to get vtree tests passing
+	if m.Path != target {
+		for i := len(m.generators) - 1; i >= 0; i-- {
+			if file, err := m.generators[i].Generate(cache, target); err == nil {
+				return file, nil
+			}
+		}
+		return nil, fs.ErrNotExist
+	}
 	vfile := &virt.File{
 		Path: m.Path,
 		Mode: m.Mode.FileMode(),

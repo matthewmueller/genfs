@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	gopath "path"
 
+	"github.com/matthewmueller/genfs/internal/vtree"
 	"github.com/matthewmueller/virt"
 )
 
@@ -12,7 +13,7 @@ type Dir struct {
 	genfs  *FileSystem
 	path   string // Current directory path
 	target string // Final target path
-	tree   *tree
+	tree   *vtree.Tree
 }
 
 var _ Interface = (*Dir)(nil)
@@ -36,7 +37,7 @@ func (d *Dir) Mode() fs.FileMode {
 func (d *Dir) GenerateFile(path string, fn func(fsys FS, file *File) error) {
 	fpath := gopath.Join(d.path, path)
 	fileg := &fileGenerator{d.genfs, fpath, fn}
-	d.tree.Insert(fpath, modeGen, fileg)
+	d.tree.GenerateFile(fpath, fileg)
 }
 
 func (d *Dir) FileGenerator(path string, generator FileGenerator) {
@@ -46,7 +47,7 @@ func (d *Dir) FileGenerator(path string, generator FileGenerator) {
 func (d *Dir) GenerateDir(path string, fn func(fsys FS, dir *Dir) error) {
 	fpath := gopath.Join(d.path, path)
 	dirg := &dirGenerator{d.genfs, d.tree, fpath, fn}
-	d.tree.Insert(fpath, modeGenDir, dirg)
+	d.tree.GenerateDir(fpath, dirg)
 }
 
 func (d *Dir) DirGenerator(path string, generator DirGenerator) {
@@ -56,7 +57,7 @@ func (d *Dir) DirGenerator(path string, generator DirGenerator) {
 func (d *Dir) ServeFile(path string, fn func(fsys FS, file *File) error) {
 	fpath := gopath.Join(d.path, path)
 	server := &fileServer{d.genfs, fpath, fn}
-	d.tree.Insert(fpath, modeGenDir, server)
+	d.tree.GenerateDir(fpath, server)
 }
 
 func (d *Dir) FileServer(path string, server FileServer) {
@@ -66,7 +67,7 @@ func (d *Dir) FileServer(path string, server FileServer) {
 func (d *Dir) GenerateExternal(path string, fn func(fsys FS, file *External) error) {
 	fpath := gopath.Join(d.path, path)
 	fileg := &externalGenerator{d.genfs, fpath, fn}
-	d.tree.Insert(fpath, modeGen, fileg)
+	d.tree.GenerateFile(fpath, fileg)
 }
 func (d *Dir) ExternalGenerator(path string, generator ExternalGenerator) {
 	d.GenerateExternal(path, generator.GenerateExternal)
@@ -120,15 +121,14 @@ func (fn GenerateDir) GenerateDir(fsys FS, dir *Dir) error {
 
 type dirGenerator struct {
 	genfs *FileSystem
-	tree  *tree
+	tree  *vtree.Tree
 	path  string
 	fn    func(fsys FS, dir *Dir) error
 }
 
-func (d *dirGenerator) Generate(cache Cache, target string) (*virt.File, error) {
+func (d *dirGenerator) Generate(cache vtree.Cache, target string) (*virt.File, error) {
 	if vfile, err := cache.Get(d.path); err == nil {
 		return vfile, nil
-		// return wrapFile(virt.Open(entry), d.genfs, d.path), nil
 	}
 	// Run the directory generator function
 	scopedFS := &scopedFS{cache, d.genfs, d.path}
@@ -139,6 +139,11 @@ func (d *dirGenerator) Generate(cache Cache, target string) (*virt.File, error) 
 	// Traverse into the directory looking for the target
 	if d.path != target {
 		return d.genfs.openFrom(d.path, target)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// fmt.Println(d.path, vfile.Path, string(vfile.Data))
+		// return vfile, nil
 	}
 	vfile := &virt.File{
 		Path:    d.path,

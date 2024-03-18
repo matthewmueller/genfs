@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path"
 
+	"github.com/matthewmueller/genfs/internal/vtree"
 	"github.com/matthewmueller/virt"
 )
 
@@ -13,7 +15,7 @@ import (
 type Session struct {
 	Cache Cache
 	FS    fs.FS
-	tree  *tree
+	tree  *vtree.Tree
 }
 
 func (f *Session) Open(target string) (fs.File, error) {
@@ -72,16 +74,13 @@ func (f *Session) ReadDir(target string) ([]fs.DirEntry, error) {
 		if !match.Mode.IsDir() {
 			return nil, formatError(errNotImplemented, "tree readdir %q", target)
 		}
-		// Run the directory generator
-		if match.Mode.IsGen() {
-			// Generate is expected to update the tree, that's why we don't use the
-			// returned file
-			if _, err := match.Generate(f.Cache, target); err != nil {
-				return nil, err
-			}
+		vdir, err := match.Generate(f.Cache, target)
+		if err != nil {
+			return nil, err
 		}
-		for _, child := range match.Children() {
-			deset.Add(newDirEntry(f, child.Name, child.Mode.FileMode(), child.Path))
+		for _, entry := range vdir.Entries {
+			childPath := path.Join(match.Path, entry.Name())
+			deset.Add(newDirEntry(f, entry.Name(), entry.Type(), childPath))
 		}
 	}
 	des, err := fs.ReadDir(f.FS, target)

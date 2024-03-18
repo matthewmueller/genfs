@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"path"
 
+	"github.com/matthewmueller/genfs/internal/vtree"
 	"github.com/matthewmueller/virt"
 )
 
@@ -74,7 +75,7 @@ type fileGenerator struct {
 	fn    func(fsys FS, file *File) error
 }
 
-func (f *fileGenerator) Generate(cache Cache, target string) (*virt.File, error) {
+func (f *fileGenerator) Generate(cache vtree.Cache, target string) (*virt.File, error) {
 	if target != f.path {
 		return nil, formatError(fs.ErrNotExist, "%q path doesn't match %q target", f.path, target)
 	}
