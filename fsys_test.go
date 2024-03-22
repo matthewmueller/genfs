@@ -1,4 +1,4 @@
-package vtree_test
+package genfs_test
 
 import (
 	"errors"
@@ -15,15 +15,15 @@ import (
 	"time"
 
 	"github.com/matryer/is"
-	"github.com/matthewmueller/genfs/internal/vtree"
+	"github.com/matthewmueller/genfs"
 	"github.com/matthewmueller/virt"
 )
 
 func TestGenerateFile(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("a.txt", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("a.txt", func(fsys genfs.FS, file *genfs.File) error {
 		file.Write([]byte("a"))
 		return nil
 	})
@@ -35,10 +35,10 @@ func TestGenerateFile(t *testing.T) {
 func TestGenerateDir(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateDir("bud", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateDir("docs", func(fsys vtree.FS, dir *vtree.Dir) error {
-			dir.GenerateFile("a.txt", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateDir("bud", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateDir("docs", func(fsys genfs.FS, dir *genfs.Dir) error {
+			dir.GenerateFile("a.txt", func(fsys genfs.FS, file *genfs.File) error {
 				file.Write([]byte("a"))
 				return nil
 			})
@@ -54,8 +54,8 @@ func TestGenerateDir(t *testing.T) {
 func TestSizeMismatch(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("bud/public/tailwind/tailwind.css", func(fs vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("bud/public/tailwind/tailwind.css", func(fs genfs.FS, file *genfs.File) error {
 		file.Write([]byte("/* tailwind */"))
 		return nil
 	})
@@ -90,8 +90,8 @@ func TestSizeMismatch(t *testing.T) {
 func TestReadDirMultipleTimes(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("bud/public/tailwind/tailwind.css", func(fs vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("bud/public/tailwind/tailwind.css", func(fs genfs.FS, file *genfs.File) error {
 		file.Write([]byte("/* tailwind */"))
 		return nil
 	})
@@ -109,8 +109,8 @@ func TestReadDirMultipleTimes(t *testing.T) {
 func TestSeek(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("a.txt", func(fs vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("a.txt", func(fs genfs.FS, file *genfs.File) error {
 		file.Write([]byte("ab"))
 		return nil
 	})
@@ -130,12 +130,12 @@ func TestSeek(t *testing.T) {
 func TestFS(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("bud/public/tailwind/tailwind.css", func(fs vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("bud/public/tailwind/tailwind.css", func(fs genfs.FS, file *genfs.File) error {
 		file.Write([]byte("/* tailwind */"))
 		return nil
 	})
-	tree.GenerateFile("bud/view/index.svelte", func(fs vtree.FS, file *vtree.File) error {
+	tree.GenerateFile("bud/view/index.svelte", func(fs genfs.FS, file *genfs.File) error {
 		file.Write([]byte("/* svelte */"))
 		return nil
 	})
@@ -215,13 +215,13 @@ func TestFS(t *testing.T) {
 	is.NoErr(fstest.TestFS(tree, "bud/public/tailwind/tailwind.css", "bud/view/index.svelte"))
 }
 
-func view() func(fsys vtree.FS, dir *vtree.Dir) error {
-	return func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateFile("index.svelte", func(fsys vtree.FS, file *vtree.File) error {
+func view() func(fsys genfs.FS, dir *genfs.Dir) error {
+	return func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateFile("index.svelte", func(fsys genfs.FS, file *genfs.File) error {
 			file.Write([]byte(`<h1>index</h1>`))
 			return nil
 		})
-		dir.GenerateFile("about/about.svelte", func(fsys vtree.FS, file *vtree.File) error {
+		dir.GenerateFile("about/about.svelte", func(fsys genfs.FS, file *genfs.File) error {
 			file.Write([]byte(`<h2>about</h2>`))
 			return nil
 		})
@@ -232,7 +232,7 @@ func view() func(fsys vtree.FS, dir *vtree.Dir) error {
 func TestViewFS(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	tree.GenerateDir("bud/view", view())
 
 	// bud
@@ -288,7 +288,7 @@ func TestViewFS(t *testing.T) {
 func TestAll(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	tree.GenerateDir("bud/view", view())
 
 	// .
@@ -565,15 +565,15 @@ func TestAll(t *testing.T) {
 func TestDir(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateDir("bud/view", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateDir("about", func(fsys vtree.FS, dir *vtree.Dir) error {
-			dir.GenerateDir("me", func(fsys vtree.FS, dir *vtree.Dir) error {
+	tree := genfs.New(fsys)
+	tree.GenerateDir("bud/view", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateDir("about", func(fsys genfs.FS, dir *genfs.Dir) error {
+			dir.GenerateDir("me", func(fsys genfs.FS, dir *genfs.Dir) error {
 				return nil
 			})
 			return nil
 		})
-		dir.GenerateDir("users/admin", func(fsys vtree.FS, dir *vtree.Dir) error {
+		dir.GenerateDir("users/admin", func(fsys genfs.FS, dir *genfs.Dir) error {
 			return nil
 		})
 		return nil
@@ -620,7 +620,7 @@ func TestReadFsys(t *testing.T) {
 			Data: []byte("a"),
 		},
 	}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	code, err := fs.ReadFile(tree, "a.txt")
 	is.NoErr(err)
 	is.Equal(string(code), "a")
@@ -629,8 +629,8 @@ func TestReadFsys(t *testing.T) {
 func TestGenerateFileError(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("bud/main.go", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("bud/main.go", func(fsys genfs.FS, file *genfs.File) error {
 		return fs.ErrNotExist
 	})
 	code, err := fs.ReadFile(tree, "bud/main.go")
@@ -644,9 +644,9 @@ func TestGenerateFileError(t *testing.T) {
 func TestHTTP(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateDir("bud/view", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateFile(dir.Relative(), func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateDir("bud/view", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateFile(dir.Relative(), func(fsys genfs.FS, file *genfs.File) error {
 			file.Write([]byte(dir.Target() + "'s data"))
 			return nil
 		})
@@ -689,9 +689,9 @@ func rootless(fpath string) string {
 func TestTargetPath(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateDir("bud/view", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateFile("about/about.svelte", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateDir("bud/view", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateFile("about/about.svelte", func(fsys genfs.FS, file *genfs.File) error {
 			file.Write([]byte(rootless(file.Target())))
 			return nil
 		})
@@ -705,12 +705,12 @@ func TestTargetPath(t *testing.T) {
 func TestDynamicDir(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateDir("bud/view", func(fsys vtree.FS, dir *vtree.Dir) error {
+	tree := genfs.New(fsys)
+	tree.GenerateDir("bud/view", func(fsys genfs.FS, dir *genfs.Dir) error {
 		doms := []string{"about/about.svelte", "index.svelte"}
 		for _, dom := range doms {
 			dom := dom
-			dir.GenerateFile(dom, func(fsys vtree.FS, file *vtree.File) error {
+			dir.GenerateFile(dom, func(fsys genfs.FS, file *genfs.File) error {
 				file.Write([]byte(`<h1>` + dom + `</h1>`))
 				return nil
 			})
@@ -734,11 +734,11 @@ func TestDynamicDir(t *testing.T) {
 func TestBases(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateDir("bud/view", func(fsys vtree.FS, dir *vtree.Dir) error {
+	tree := genfs.New(fsys)
+	tree.GenerateDir("bud/view", func(fsys genfs.FS, dir *genfs.Dir) error {
 		return nil
 	})
-	tree.GenerateDir("bud/controller", func(fsys vtree.FS, dir *vtree.Dir) error {
+	tree.GenerateDir("bud/controller", func(fsys genfs.FS, dir *genfs.Dir) error {
 		return nil
 	})
 	stat, err := fs.Stat(tree, "bud/controller")
@@ -752,10 +752,10 @@ func TestBases(t *testing.T) {
 func TestDirUnevenMerge(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateDir("bud/view", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateDir("public", func(fsys vtree.FS, dir *vtree.Dir) error {
-			dir.GenerateFile("favicon.ico", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateDir("bud/view", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateDir("public", func(fsys genfs.FS, dir *genfs.Dir) error {
+			dir.GenerateFile("favicon.ico", func(fsys genfs.FS, file *genfs.File) error {
 				file.Write([]byte("cool_favicon.ico"))
 				return nil
 			})
@@ -763,9 +763,9 @@ func TestDirUnevenMerge(t *testing.T) {
 		})
 		return nil
 	})
-	tree.GenerateDir("bud", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateDir("controller", func(fsys vtree.FS, dir *vtree.Dir) error {
-			dir.GenerateFile("controller.go", func(fsys vtree.FS, file *vtree.File) error {
+	tree.GenerateDir("bud", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateDir("controller", func(fsys genfs.FS, dir *genfs.Dir) error {
+			dir.GenerateFile("controller.go", func(fsys genfs.FS, file *genfs.File) error {
 				file.Write([]byte("package controller"))
 				return nil
 			})
@@ -785,12 +785,12 @@ func TestDirUnevenMerge(t *testing.T) {
 func TestAddGenerator(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	tree.GenerateDir("bud/view", view())
 
 	// Add the controller
-	tree.GenerateDir("bud/controller", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateFile("controller.go", func(fsys vtree.FS, file *vtree.File) error {
+	tree.GenerateDir("bud/controller", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateFile("controller.go", func(fsys genfs.FS, file *genfs.File) error {
 			file.Write([]byte(`package controller`))
 			return nil
 		})
@@ -818,13 +818,13 @@ type commandGenerator struct {
 	Input string
 }
 
-func (c *commandGenerator) GenerateFile(fsys vtree.FS, file *vtree.File) error {
+func (c *commandGenerator) GenerateFile(fsys genfs.FS, file *genfs.File) error {
 	file.Write([]byte(c.Input + c.Input))
 	return nil
 }
 
-func (c *commandGenerator) GenerateDir(fsys vtree.FS, dir *vtree.Dir) error {
-	dir.GenerateFile("index.svelte", func(fsys vtree.FS, file *vtree.File) error {
+func (c *commandGenerator) GenerateDir(fsys genfs.FS, dir *genfs.Dir) error {
+	dir.GenerateFile("index.svelte", func(fsys genfs.FS, file *genfs.File) error {
 		file.Write([]byte(c.Input + c.Input))
 		return nil
 	})
@@ -834,7 +834,7 @@ func (c *commandGenerator) GenerateDir(fsys vtree.FS, dir *vtree.Dir) error {
 func TestFileGenerator(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	tree.FileGenerator("bud/command/command.go", &commandGenerator{Input: "a"})
 	code, err := fs.ReadFile(tree, "bud/command/command.go")
 	is.NoErr(err)
@@ -844,7 +844,7 @@ func TestFileGenerator(t *testing.T) {
 func TestDirGenerator(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	tree.DirGenerator("bud/view", &commandGenerator{Input: "a"})
 	code, err := fs.ReadFile(tree, "bud/view/index.svelte")
 	is.NoErr(err)
@@ -854,12 +854,12 @@ func TestDirGenerator(t *testing.T) {
 func TestDotReadDirEmpty(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("bud/treeerate/main.go", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("bud/treeerate/main.go", func(fsys genfs.FS, file *genfs.File) error {
 		file.Write([]byte("package main"))
 		return nil
 	})
-	tree.GenerateFile("go.mod", func(fsys vtree.FS, file *vtree.File) error {
+	tree.GenerateFile("go.mod", func(fsys genfs.FS, file *genfs.File) error {
 		file.Write([]byte("module pkg"))
 		return nil
 	})
@@ -871,14 +871,14 @@ func TestDotReadDirEmpty(t *testing.T) {
 func TestEmbedOpen(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.FileGenerator("bud/view/index.svelte", &vtree.Embed{
+	tree := genfs.New(fsys)
+	tree.FileGenerator("bud/view/index.svelte", &genfs.Embed{
 		Data: []byte(`<h1>index</h1>`),
 	})
-	tree.FileGenerator("bud/view/about/about.svelte", &vtree.Embed{
+	tree.FileGenerator("bud/view/about/about.svelte", &genfs.Embed{
 		Data: []byte(`<h1>about</h1>`),
 	})
-	tree.FileGenerator("bud/public/favicon.ico", &vtree.Embed{
+	tree.FileGenerator("bud/public/favicon.ico", &genfs.Embed{
 		Data: []byte(`favicon.ico`),
 	})
 	// bud/view/index.svelte
@@ -921,8 +921,8 @@ func TestEmbedOpen(t *testing.T) {
 func TestGoModGoMod(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("go.mod", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("go.mod", func(fsys genfs.FS, file *genfs.File) error {
 		file.Write([]byte("module app.com\nrequire mod.test/module v1.2.4"))
 		return nil
 	})
@@ -938,8 +938,8 @@ func TestGoModGoMod(t *testing.T) {
 func TestGoModGoModEmbed(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.FileGenerator("go.mod", &vtree.Embed{
+	tree := genfs.New(fsys)
+	tree.FileGenerator("go.mod", &genfs.Embed{
 		Data: []byte("module app.com\nrequire mod.test/module v1.2.4"),
 	})
 	stat, err := fs.Stat(tree, "go.mod/go.mod")
@@ -954,9 +954,9 @@ func TestGoModGoModEmbed(t *testing.T) {
 func TestReadDirNotExists(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	reads := 0
-	tree.GenerateFile("bud/controller/controller.go", func(fsys vtree.FS, file *vtree.File) error {
+	tree.GenerateFile("bud/controller/controller.go", func(fsys genfs.FS, file *genfs.File) error {
 		reads++
 		return fs.ErrNotExist
 	})
@@ -974,9 +974,9 @@ func TestReadDirNotExists(t *testing.T) {
 func TestReadRootNotExists(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	reads := 0
-	tree.GenerateFile("controller.go", func(fsys vtree.FS, file *vtree.File) error {
+	tree.GenerateFile("controller.go", func(fsys genfs.FS, file *genfs.File) error {
 		reads++
 		return fs.ErrNotExist
 	})
@@ -1037,8 +1037,8 @@ func TestReadRootNotExists(t *testing.T) {
 func TestGenerateDirNotExists(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
-	tree.GenerateDir("bud/public", func(fsys vtree.FS, dir *vtree.Dir) error {
+	tree := genfs.New(fsys)
+	tree.GenerateDir("bud/public", func(fsys genfs.FS, dir *genfs.Dir) error {
 		return fs.ErrNotExist
 	})
 	stat, err := fs.Stat(tree, "bud/public")
@@ -1059,8 +1059,8 @@ func TestGeneratorPriority(t *testing.T) {
 			Data: []byte("a"),
 		},
 	}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("a.txt", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("a.txt", func(fsys genfs.FS, file *genfs.File) error {
 		file.Write([]byte("b"))
 		return nil
 	})
@@ -1074,8 +1074,8 @@ func TestSideBySideRoot(t *testing.T) {
 	fsys := virt.Tree{
 		"a.txt": &virt.File{Data: []byte("a")},
 	}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("b.txt", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("b.txt", func(fsys genfs.FS, file *genfs.File) error {
 		file.Write([]byte("b"))
 		return nil
 	})
@@ -1093,8 +1093,8 @@ func TestSideBySideDir(t *testing.T) {
 	fsys := virt.Tree{
 		"app/a.txt": &virt.File{Data: []byte("a")},
 	}
-	tree := vtree.New(fsys)
-	tree.GenerateFile("app/b.txt", func(fsys vtree.FS, file *vtree.File) error {
+	tree := genfs.New(fsys)
+	tree.GenerateFile("app/b.txt", func(fsys genfs.FS, file *genfs.File) error {
 		file.Write([]byte("b"))
 		return nil
 	})
@@ -1109,8 +1109,8 @@ func TestSideBySideDir(t *testing.T) {
 }
 
 func ExampleFS() {
-	fsys := vtree.New(virt.Map{})
-	fsys.GenerateFile("a.txt", func(fsys vtree.FS, file *vtree.File) error {
+	fsys := genfs.New(virt.Map{})
+	fsys.GenerateFile("a.txt", func(fsys genfs.FS, file *genfs.File) error {
 		file.WriteString("a")
 		return nil
 	})
@@ -1123,24 +1123,24 @@ var favicon = []byte{0x00, 0x00, 0x01}
 
 func TestDirShared(t *testing.T) {
 	is := is.New(t)
-	fsys := vtree.New(virt.Map{})
-	fsys.GenerateDir(".", func(fsys vtree.FS, dir *vtree.Dir) error {
+	fsys := genfs.New(virt.Map{})
+	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
 		switch dir.Target() {
 		case "index.html":
-			dir.GenerateFile("index.html", func(fsys vtree.FS, file *vtree.File) error {
+			dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
 				file.Write([]byte(`<h1>index</h1>`))
 				return nil
 			})
 		case "index.js":
-			dir.GenerateFile("index.js", func(fsys vtree.FS, file *vtree.File) error {
+			dir.GenerateFile("index.js", func(fsys genfs.FS, file *genfs.File) error {
 				file.Write([]byte(`console.log('index')`))
 				return nil
 			})
 		}
 		return nil
 	})
-	fsys.GenerateDir(".", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateFile("random.ico", func(fsys vtree.FS, file *vtree.File) error {
+	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateFile("random.ico", func(fsys genfs.FS, file *genfs.File) error {
 			file.Write(favicon)
 			return nil
 		})
@@ -1166,16 +1166,16 @@ func TestDirShared(t *testing.T) {
 
 func TestDirDuplicateLastWins(t *testing.T) {
 	is := is.New(t)
-	fsys := vtree.New(virt.Map{})
-	fsys.GenerateDir(".", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateFile("index.html", func(fsys vtree.FS, file *vtree.File) error {
+	fsys := genfs.New(virt.Map{})
+	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
 			file.Write([]byte(`<h1>index</h1>`))
 			return nil
 		})
 		return nil
 	})
-	fsys.GenerateDir(".", func(fsys vtree.FS, dir *vtree.Dir) error {
-		dir.GenerateFile("index.html", func(fsys vtree.FS, file *vtree.File) error {
+	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
 			file.Write([]byte(`<h1>index2</h1>`))
 			return nil
 		})

@@ -1,4 +1,4 @@
-package vtree_test
+package genfs_test
 
 import (
 	"io/fs"
@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/matryer/is"
+	"github.com/matthewmueller/genfs"
 	"github.com/matthewmueller/genfs/internal/cache"
-	"github.com/matthewmueller/genfs/internal/vtree"
 	"github.com/matthewmueller/virt"
 )
 
@@ -23,7 +23,7 @@ func TestError(t *testing.T) {
 func TestNew(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.Equal(tree.Print(), `. mode=d-
 `)
 }
@@ -47,7 +47,7 @@ var fg = &treeGenerator{"f"}
 func TestSimpleGenerateFile(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateFile2("a/b/c", cg))
 	expect := `. mode=d-
 └── a mode=d-
@@ -60,7 +60,7 @@ func TestSimpleGenerateFile(t *testing.T) {
 func TestRootDir(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateDir2(".", ag))
 	expect := `. mode=dg generators=a
 `
@@ -70,7 +70,7 @@ func TestRootDir(t *testing.T) {
 func TestSimpleGenerateDir(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateDir2("a", ag))
 	expect := `. mode=d-
 └── a mode=dg generators=a
@@ -81,7 +81,7 @@ func TestSimpleGenerateDir(t *testing.T) {
 func TestSampleGen(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateFile2("./a", ag))
 	is.NoErr(tree.GenerateDir2("b", bg))
 	is.NoErr(tree.GenerateDir2("b/c", cg))
@@ -100,7 +100,7 @@ func TestSampleGen(t *testing.T) {
 func TestTreeFiller(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateFile2("a", ag))
 	is.NoErr(tree.GenerateFile2("b/c/e", eg))
 	is.NoErr(tree.GenerateFile2("b/c/f", fg))
@@ -118,7 +118,7 @@ func TestTreeFiller(t *testing.T) {
 func TestTreeFindPrefix(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateFile2("a", ag))
 	is.NoErr(tree.GenerateDir2("b", bg))
 	is.NoErr(tree.GenerateDir2("b/c", cg))
@@ -149,7 +149,7 @@ func TestTreeFindPrefix(t *testing.T) {
 func TestTreeDelete(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateFile2("a", ag))
 	is.NoErr(tree.GenerateDir2("b", bg))
 	is.NoErr(tree.GenerateDir2("b/c", cg))
@@ -166,7 +166,7 @@ func TestTreeDelete(t *testing.T) {
 func TestTreeDirToGenFile(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateDir2("bud/node_modules", ag))
 	is.NoErr(tree.GenerateFile2("bud/node_modules/runtime/hot", bg))
 	match, ok := tree.FindPrefix("bud/node_modules/runtime/svelte")
@@ -185,7 +185,7 @@ func TestTreeDirToGenFile(t *testing.T) {
 func TestTreeGenFileToGenDirectory(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	tree.GenerateDir2("bud/node_modules", ag)
 	tree.GenerateFile2("bud/node_modules/runtime", bg)
 	err := tree.GenerateFile2("bud/node_modules/runtime/hot", cg)
@@ -196,7 +196,7 @@ func TestTreeGenFileToGenDirectory(t *testing.T) {
 func TestTreeRootDirGenerator(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	tree.GenerateDir2(".", ag)
 	match, ok := tree.FindPrefix("index.html")
 	is.True(ok)
@@ -207,7 +207,7 @@ func TestTreeRootDirGenerator(t *testing.T) {
 	is.Equal(tree.Print(), expect)
 }
 
-func Func(label string, fn func(_ cache.Interface, target string) (*virt.File, error)) vtree.Generator {
+func Func(label string, fn func(_ cache.Interface, target string) (*virt.File, error)) genfs.Generator {
 	return &funcGenerator{label, fn}
 }
 
@@ -227,7 +227,7 @@ func (g *funcGenerator) String() string {
 func TestTreeSharedDirGenerator(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateDir2(".", Func("a", func(_ cache.Interface, target string) (*virt.File, error) {
 		is.NoErr(tree.GenerateFile2("index.html", Func("b", func(_ cache.Interface, target string) (*virt.File, error) {
 			return &virt.File{
@@ -278,7 +278,7 @@ func TestTreeSharedDirGenerator(t *testing.T) {
 func TestTreeSharedDirAndDirGenerator(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateFile2("favicon.ico", Func("a", func(_ cache.Interface, target string) (*virt.File, error) {
 		return &virt.File{
 			Path: target,
@@ -337,7 +337,7 @@ func TestTreeSharedDirAndDirGenerator(t *testing.T) {
 func TestTreeGenDirFileGenOverride(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateDir2("a", ag))
 	is.NoErr(tree.GenerateDir2("a", bg))
 	err := tree.GenerateFile2("a", cg)
@@ -356,7 +356,7 @@ func TestTreeGenDirFileGenOverride(t *testing.T) {
 func TestTreeFileGenOverride(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateFile2("a.txt", Func("a", func(_ cache.Interface, target string) (*virt.File, error) {
 		return &virt.File{
 			Path: target,
@@ -387,7 +387,7 @@ func TestTreeFileGenOverride(t *testing.T) {
 func TestDynamic(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
-	tree := vtree.New(fsys)
+	tree := genfs.New(fsys)
 	is.NoErr(tree.GenerateDir2("bud", Func("a", func(_ cache.Interface, target string) (*virt.File, error) {
 		err := tree.GenerateDir2("bud/docs", Func("b", func(_ cache.Interface, target string) (*virt.File, error) {
 			err := tree.GenerateFile2("bud/docs/a.txt", Func("c", func(_ cache.Interface, target string) (*virt.File, error) {

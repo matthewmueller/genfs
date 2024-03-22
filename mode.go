@@ -1,4 +1,4 @@
-package vtree
+package genfs
 
 import "io/fs"
 
