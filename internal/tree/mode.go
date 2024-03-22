@@ -1,4 +1,4 @@
-package genfs
+package tree
 
 import "io/fs"
 

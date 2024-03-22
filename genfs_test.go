@@ -1168,18 +1168,20 @@ func TestDirDuplicateLastWins(t *testing.T) {
 	is := is.New(t)
 	fsys := genfs.New(virt.Map{})
 	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
-		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+		fmt.Println("first")
+		return dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+			fmt.Println("OK.")
 			file.Write([]byte(`<h1>index</h1>`))
 			return nil
 		})
-		return nil
 	})
 	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
-		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+		fmt.Println("second")
+		return dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+			fmt.Println("HER?E")
 			file.Write([]byte(`<h1>index2</h1>`))
 			return nil
 		})
-		return nil
 	})
 	code, err := fs.ReadFile(fsys, "index.html")
 	is.NoErr(err)
