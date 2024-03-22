@@ -1,44 +1,51 @@
 package vtree
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path"
 	"sort"
 	"strings"
 
+	"github.com/matthewmueller/genfs/internal/cache"
 	"github.com/matthewmueller/virt"
 	"github.com/xlab/treeprint"
 )
 
-// FillerDir
-// GenFile
-// GenDir
-
-// FillerDir => FillerDir do nothing d
-// FillerDir => GenFile error
-// FillerDir => GenDir append gd
-
-// GenFile => GenFile error
-// GenFile => GenDir error
-// GenFile => FillerDir error
-
-// GenDir => GenDir append gd
-// GenDir => GenFile error
-// GenDir => FillerDir do nothing gd
-
-type Cache interface {
-	Get(path string) (*virt.File, error)
-	Set(path string, file *virt.File) error
-	Link(from string, to ...string) error
-}
-
 type Generator interface {
-	Generate(cache Cache, target string) (*virt.File, error)
+	Generate(cache cache.Interface, target string) (*virt.File, error)
 }
 
-func New() *Tree {
+type FileGenerator interface {
+	GenerateFile(fsys FS, file *File) error
+}
+
+type DirGenerator interface {
+	GenerateDir(fsys FS, dir *Dir) error
+}
+
+type GeneratorFunc func(cache cache.Interface, target string) (*virt.File, error)
+
+func (fn GeneratorFunc) Generate(cache cache.Interface, target string) (*virt.File, error) {
+	return fn(cache, target)
+}
+
+type Embed struct {
+	Data []byte
+}
+
+var _ FileGenerator = (*Embed)(nil)
+
+func (e *Embed) GenerateFile(fsys FS, file *File) error {
+	file.Write(e.Data)
+	return nil
+}
+
+func New(fsys fs.FS) *Tree {
 	return &Tree{
+		fsys: fsys,
 		root: &Node{
 			Name:     ".",
 			Mode:     ModeDir,
@@ -48,10 +55,266 @@ func New() *Tree {
 }
 
 type Tree struct {
+	fsys fs.FS
 	root *Node
 }
 
-func (t *Tree) GenerateFile(fpath string, generator Generator) error {
+var _ fs.FS = (*Tree)(nil)
+var _ fs.ReadDirFS = (*Tree)(nil)
+
+type File struct {
+	target string
+	path   string
+	mode   fs.FileMode
+	data   *bytes.Buffer
+}
+
+func (f *File) Target() string {
+	return f.target
+}
+
+func (f *File) Path() string {
+	return f.path
+}
+
+func (f *File) Relative() string {
+	return relativePath(f.path, f.target)
+}
+
+func (f *File) Mode() fs.FileMode {
+	return f.mode
+}
+
+func (f *File) Write(p []byte) (n int, err error) {
+	return f.data.Write(p)
+}
+
+func (f *File) WriteString(s string) (n int, err error) {
+	return f.data.WriteString(s)
+}
+
+func (f *File) Read(p []byte) (n int, err error) {
+	return f.data.Read(p)
+}
+
+type Dir struct {
+	tree   *Tree
+	target string
+	dir    string
+	mode   fs.FileMode
+}
+
+func (d *Dir) Target() string {
+	return d.target
+}
+
+func (d *Dir) Path() string {
+	return d.dir
+}
+
+func (d *Dir) Mode() fs.FileMode {
+	return d.mode
+}
+
+func (d *Dir) Relative() string {
+	return relativePath(d.dir, d.target)
+}
+
+type FS fs.FS
+
+func (d *Dir) GenerateFile(relpath string, fn func(fsys FS, file *File) error) error {
+	return d.tree.GenerateFile2(path.Join(d.dir, relpath), GeneratorFunc(func(cache cache.Interface, target string) (*virt.File, error) {
+		file := &File{target, relpath, fs.FileMode(0), &bytes.Buffer{}}
+		fsys := scopedFS{d.tree, cache, relpath}
+		if err := fn(fsys, file); err != nil {
+			return nil, err
+		}
+		return &virt.File{
+			Path: relpath,
+			Mode: file.Mode(),
+			Data: file.data.Bytes(),
+		}, nil
+	}))
+}
+
+func (d *Dir) FileGenerator(relpath string, generator FileGenerator) error {
+	return d.GenerateFile(relpath, generator.GenerateFile)
+}
+
+func (d *Dir) GenerateDir(reldir string, fn func(fsys FS, dir *Dir) error) error {
+	reldir = path.Join(d.dir, reldir)
+	return d.tree.GenerateDir2(reldir, GeneratorFunc(func(cache cache.Interface, target string) (*virt.File, error) {
+		dir := &Dir{d.tree, target, reldir, fs.ModeDir}
+		fsys := scopedFS{d.tree, cache, reldir}
+		if err := fn(fsys, dir); err != nil {
+			return nil, err
+		}
+		return &virt.File{
+			Path: reldir,
+			Mode: dir.mode,
+			// Intentionally nil, filled in by the tree
+			Entries: nil,
+		}, nil
+	}))
+}
+
+func (d *Dir) DirGenerator(reldir string, generator DirGenerator) error {
+	return d.GenerateDir(reldir, generator.GenerateDir)
+}
+
+func (t *Tree) GenerateFile(relpath string, fn func(fsys FS, file *File) error) error {
+	dir := &Dir{t, relpath, ".", fs.ModeDir}
+	return dir.GenerateFile(relpath, fn)
+}
+
+func (t *Tree) FileGenerator(relpath string, generator FileGenerator) error {
+	dir := &Dir{t, relpath, ".", fs.ModeDir}
+	return dir.FileGenerator(relpath, generator)
+}
+
+func (t *Tree) GenerateDir(reldir string, fn func(fsys FS, dir *Dir) error) error {
+	dir := &Dir{t, reldir, ".", fs.ModeDir}
+	return dir.GenerateDir(reldir, fn)
+}
+
+func (t *Tree) DirGenerator(reldir string, generator DirGenerator) error {
+	dir := &Dir{t, reldir, ".", fs.ModeDir}
+	return dir.DirGenerator(reldir, generator)
+}
+
+type scopedFS struct {
+	fsys  fs.FS
+	cache cache.Interface
+	from  string
+}
+
+func (s scopedFS) Open(name string) (fs.File, error) {
+	return s.fsys.Open(name)
+}
+
+func (t *Tree) openWith(cache cache.Interface, previous, target string) (fs.File, error) {
+	// Check that target is valid
+	if !fs.ValidPath(target) {
+		return nil, &fs.PathError{
+			Op:   "open",
+			Path: target,
+			Err:  fs.ErrInvalid,
+		}
+	}
+
+	// First try finding an exact match
+	match, ok := t.Find(target)
+	if ok && match.Mode.IsGen() {
+		if vfile, err := match.Generate(cache, target); err == nil {
+			return wrapFile(t, vfile.Path, virt.Open(vfile)), nil
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("vtree: error generating %q: %w", target, err)
+		}
+	}
+
+	// Next try opening the file from the fallback filesystem
+	if file, err := t.fsys.Open(target); err == nil {
+		return wrapFile(t, target, file), nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("vtree: error opening %q: %w", target, err)
+	}
+
+	// Next, if we did find a match above, but it's not a generator, it must be
+	// a filler directory, so return it now
+	if ok && match.Mode.IsDir() {
+		vfile, err := match.Generate(cache, target)
+		if err != nil {
+			return nil, fmt.Errorf("vtree: error generating directory %q: %w", target, err)
+		}
+		return wrapFile(t, vfile.Path, virt.Open(vfile)), nil
+	}
+
+	// Lastly, try finding a node by its prefix. We only allow directory
+	// generators because they can generate sub-files and directories that will
+	// end up matching.
+	match, ok = t.FindPrefix(target)
+	if !ok || !match.Mode.IsGenDir() {
+		return nil, fmt.Errorf("vtree: %q %w", target, fs.ErrNotExist)
+	}
+
+	// Ignore the generated file, because this isn't an exact match anyway
+	if _, err := match.Generate(cache, target); err != nil {
+		return nil, fmt.Errorf("vtree: error generating directory %q: %w", target, err)
+	}
+
+	// If we're not making progress, return an error
+	if match.Path == previous {
+		return nil, fmt.Errorf("vtree: %q: %w", target, fs.ErrNotExist)
+	}
+
+	// Now that the directory has been generated, try again
+	return t.openWith(cache, match.Path, target)
+}
+
+func (t *Tree) OpenWith(cache cache.Interface, target string) (fs.File, error) {
+	return t.openWith(cache, "", target)
+}
+
+func (t *Tree) ReadDirWith(cache cache.Interface, name string) (entries []fs.DirEntry, err error) {
+	found := false
+
+	// First try finding an exact match, generate the directory, and append its
+	// entries
+	if match, ok := t.Find(name); ok && match.Mode.IsDir() {
+		if vfile, err := match.Generate(cache, name); err == nil {
+			for _, entry := range vfile.Entries {
+				entries = append(entries, wrapEntry(t, entry))
+			}
+			found = true
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("readdir: error generating directory %q: %w", name, err)
+		}
+	}
+
+	// Next try reading the directory from the fallback filesystem and append its
+	// entries
+	if des, err := fs.ReadDir(t.fsys, name); err == nil {
+		entries = append(entries, des...)
+		found = true
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("readdir: error reading directory %q: %w", name, err)
+	}
+
+	// If we didn't find anything, return fs.ErrNotExist
+	if !found {
+		return nil, fmt.Errorf("readdir: %q: %w", name, fs.ErrNotExist)
+	}
+
+	return dirEntrySet(entries), nil
+}
+
+func dirEntrySet(entries []fs.DirEntry) (des []fs.DirEntry) {
+	seen := map[string]bool{}
+	for _, entry := range entries {
+		if seen[entry.Name()] {
+			continue
+		}
+		seen[entry.Name()] = true
+		des = append(des, entry)
+	}
+	sort.Slice(des, func(i, j int) bool {
+		return des[i].Name() < des[j].Name()
+	})
+	return des
+}
+
+func (t *Tree) Open(name string) (fs.File, error) {
+	return t.OpenWith(cache.Discard(), name)
+}
+
+// ReadDir reads the named directory. We implement ReadDir in addition to Open
+// so that we can merge generated files with the fs.FS files that can later be
+// read by Open.
+func (t *Tree) ReadDir(name string) (des []fs.DirEntry, err error) {
+	return t.ReadDirWith(cache.Discard(), name)
+}
+
+func (t *Tree) GenerateFile2(fpath string, generator Generator) error {
 	fpath = path.Clean(fpath)
 	if fpath == "." {
 		return &fs.PathError{
@@ -91,7 +354,7 @@ func (t *Tree) GenerateFile(fpath string, generator Generator) error {
 	}
 }
 
-func (t *Tree) GenerateDir(fpath string, generator Generator) error {
+func (t *Tree) GenerateDir2(fpath string, generator Generator) error {
 	fpath = path.Clean(fpath)
 	// Turn the root into a dir generator
 	if fpath == "." {
@@ -189,41 +452,64 @@ type Match struct {
 	node       *Node
 }
 
-func (m *Match) Generate(cache Cache, target string) (*virt.File, error) {
-	// Comment this out to get vtree tests passing
-	if m.Path != target {
-		for i := len(m.generators) - 1; i >= 0; i-- {
-			if file, err := m.generators[i].Generate(cache, target); err == nil {
-				return file, nil
-			}
-		}
-		return nil, fs.ErrNotExist
-	}
-	vfile := &virt.File{
-		Path: m.Path,
-		Mode: m.Mode.FileMode(),
-	}
-	for i := len(m.generators) - 1; i >= 0; i-- {
-		file, err := m.generators[i].Generate(cache, target)
-		if err != nil {
-			return nil, err
-		}
-		if file.IsDir() {
-			vfile.Entries = append(vfile.Entries, file.Entries...)
-		} else {
-			vfile.Data = file.Data
-		}
-	}
+func (m *Match) entries() (entries []*virt.DirEntry) {
 	for _, child := range m.node.children {
-		vfile.Entries = append(vfile.Entries, &virt.File{
+		entries = append(entries, &virt.DirEntry{
 			Path: path.Join(m.Path, child.Name),
 			Mode: child.Mode.FileMode(),
 		})
 	}
-	sort.Slice(vfile.Entries, func(i, j int) bool {
-		return vfile.Entries[i].Name() < vfile.Entries[j].Name()
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name() < entries[j].Name()
 	})
-	return vfile, nil
+	return entries
+}
+
+func (m *Match) Generate(cache cache.Interface, target string) (*virt.File, error) {
+	switch m.Mode {
+	case ModeGenDir:
+		return m.generateGenDir(cache, target)
+	case ModeGen:
+		return m.generateGen(cache, target)
+	case ModeDir:
+		return m.generateDir(cache, target)
+	default:
+		return nil, fmt.Errorf("%w: invalid mode %s", fs.ErrInvalid, m.Mode)
+	}
+}
+
+func (m *Match) generateGenDir(cache cache.Interface, target string) (*virt.File, error) {
+	// Run generators to discover new files, but ignore their entries since they
+	// shouldn't be creating entries anyway
+	for i := len(m.generators) - 1; i >= 0; i-- {
+		if _, err := m.generators[i].Generate(cache, target); err != nil {
+			return nil, err
+		}
+	}
+	// Return the directory with the children filled in
+	return &virt.File{
+		Path:    m.Path,
+		Mode:    m.Mode.FileMode(),
+		Entries: m.entries(),
+	}, nil
+}
+
+func (m *Match) generateGen(cache cache.Interface, target string) (*virt.File, error) {
+	// There should only be one generator for a file
+	if len(m.generators) != 1 {
+		return nil, fmt.Errorf("%w: expected 1 generator, got %d", fs.ErrInvalid, len(m.generators))
+	}
+	return m.generators[0].Generate(cache, target)
+}
+
+func (m *Match) generateDir(_ cache.Interface, _ string) (*virt.File, error) {
+	// This is simply a filler directory created by mkdirAll, just return the
+	// children
+	return &virt.File{
+		Path:    m.Path,
+		Mode:    m.Mode.FileMode(),
+		Entries: m.entries(),
+	}, nil
 }
 
 func (t *Tree) Print() string {
@@ -353,4 +639,14 @@ func (n *Node) Print(tree treeprint.Tree) string {
 		child.Print(branch)
 	}
 	return n.Name
+}
+
+func relativePath(base, target string) string {
+	rel := strings.TrimPrefix(target, base)
+	if rel == "" {
+		return "."
+	} else if rel[0] == '/' {
+		rel = rel[1:]
+	}
+	return rel
 }

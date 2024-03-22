@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"io/fs"
 
-	"github.com/matthewmueller/genfs/internal/vtree"
+	"github.com/matthewmueller/genfs/internal/cache"
 	"github.com/matthewmueller/virt"
 )
 
@@ -26,7 +26,7 @@ type fileServer struct {
 
 var _ generator = (*fileServer)(nil)
 
-func (f *fileServer) Generate(cache vtree.Cache, target string) (*virt.File, error) {
+func (f *fileServer) Generate(cache cache.Interface, target string) (*virt.File, error) {
 	if vfile, err := cache.Get(target); err == nil {
 		return vfile, nil
 	}

@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"strings"
 
+	"github.com/matthewmueller/genfs/internal/cache"
 	"github.com/matthewmueller/genfs/internal/vtree"
 	"github.com/matthewmueller/virt"
 )
@@ -27,11 +28,11 @@ type FS interface {
 }
 
 type generator interface {
-	Generate(cache vtree.Cache, target string) (*virt.File, error)
+	Generate(cache cache.Interface, target string) (*virt.File, error)
 }
 
 func New() *FileSystem {
-	tree := vtree.New()
+	tree := vtree.New(virt.List{})
 	session := &Session{discardCache{}, &virt.List{}, tree}
 	return &FileSystem{tree, session}
 }
@@ -51,7 +52,7 @@ func (f *FileSystem) Generator(generator Generator) {
 
 func (f *FileSystem) GenerateFile(path string, fn func(fsys FS, file *File) error) {
 	fileg := &fileGenerator{f, path, fn}
-	f.tree.GenerateFile(path, fileg)
+	f.tree.GenerateFile2(path, fileg)
 }
 
 func (f *FileSystem) FileGenerator(path string, generator FileGenerator) {
@@ -60,7 +61,7 @@ func (f *FileSystem) FileGenerator(path string, generator FileGenerator) {
 
 func (f *FileSystem) GenerateDir(path string, fn func(fsys FS, dir *Dir) error) {
 	dirg := &dirGenerator{f, f.tree, path, fn}
-	f.tree.GenerateDir(path, dirg)
+	f.tree.GenerateDir2(path, dirg)
 }
 
 func (f *FileSystem) DirGenerator(path string, generator DirGenerator) {
@@ -69,7 +70,7 @@ func (f *FileSystem) DirGenerator(path string, generator DirGenerator) {
 
 func (f *FileSystem) ServeFile(dir string, fn func(fsys FS, file *File) error) {
 	server := &fileServer{f, dir, fn}
-	f.tree.GenerateDir(dir, server)
+	f.tree.GenerateDir2(dir, server)
 }
 
 func (f *FileSystem) FileServer(dir string, server FileServer) {
@@ -78,7 +79,7 @@ func (f *FileSystem) FileServer(dir string, server FileServer) {
 
 func (f *FileSystem) GenerateExternal(path string, fn func(fsys FS, file *External) error) {
 	fileg := &externalGenerator{f, path, fn}
-	f.tree.GenerateFile(path, fileg)
+	f.tree.GenerateFile2(path, fileg)
 }
 
 func (f *FileSystem) ExternalGenerator(path string, generator ExternalGenerator) {

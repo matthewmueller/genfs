@@ -130,7 +130,7 @@ func TestFS(t *testing.T) {
 	is.Equal(info.IsDir(), false)
 	is.Equal(info.Size(), int64(14))
 
-	// read bfserated data
+	// read the data
 	data, err := fs.ReadFile(gfs, "bud/public/index.html")
 	is.True(err != nil)
 	is.True(errors.Is(err, fs.ErrNotExist))
