@@ -118,7 +118,7 @@ func (f *FileSystem) open(cache cache.Interface, previous, target string) (fs.Fi
 		if vfile, err := match.Generate(cache, target); err == nil {
 			return wrapFile(f, vfile.Path, virt.Open(vfile)), nil
 		} else if !errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("vtree: error generating %q: %w", target, err)
+			return nil, fmt.Errorf("genfs: error generating %q: %w", target, err)
 		}
 	}
 
@@ -126,7 +126,7 @@ func (f *FileSystem) open(cache cache.Interface, previous, target string) (fs.Fi
 	if file, err := f.fsys.Open(target); err == nil {
 		return wrapFile(f, target, file), nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("vtree: error opening %q: %w", target, err)
+		return nil, fmt.Errorf("genfs: error opening %q: %w", target, err)
 	}
 
 	// Next, if we did find a match above, but it's not a generator, it must be
@@ -134,7 +134,7 @@ func (f *FileSystem) open(cache cache.Interface, previous, target string) (fs.Fi
 	if ok && match.Mode.IsDir() {
 		vfile, err := match.Generate(cache, target)
 		if err != nil {
-			return nil, fmt.Errorf("vtree: error generating directory %q: %w", target, err)
+			return nil, fmt.Errorf("genfs: error generating directory %q: %w", target, err)
 		}
 		return wrapFile(f, vfile.Path, virt.Open(vfile)), nil
 	}
@@ -144,17 +144,17 @@ func (f *FileSystem) open(cache cache.Interface, previous, target string) (fs.Fi
 	// end up matching.
 	match, ok = f.tree.FindPrefix(target)
 	if !ok || !match.Mode.IsGenDir() {
-		return nil, fmt.Errorf("vtree: %q %w", target, fs.ErrNotExist)
+		return nil, fmt.Errorf("genfs: %q %w", target, fs.ErrNotExist)
 	}
 
 	// Ignore the generated file, because this isn't an exact match anyway
 	if _, err := match.Generate(cache, target); err != nil {
-		return nil, fmt.Errorf("vtree: error generating directory %q: %w", target, err)
+		return nil, fmt.Errorf("genfs: error generating directory %q: %w", target, err)
 	}
 
 	// If we're not making progress, return an error
 	if match.Path == previous {
-		return nil, fmt.Errorf("vtree: %q: %w", target, fs.ErrNotExist)
+		return nil, fmt.Errorf("genfs: %q: %w", target, fs.ErrNotExist)
 	}
 
 	// Now that the directory has been generated, try again

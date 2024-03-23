@@ -2,11 +2,11 @@ package genfs_test
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -991,49 +991,6 @@ func TestReadRootNotExists(t *testing.T) {
 	is.Equal(reads, 1)
 }
 
-// func TestServeFile(t *testing.T) {
-// 	is := is.New(t)
-// 	fsys := virt.Map{}
-// 	tree := vtree.New(fsys)
-// 	tree.ServeFile("duo/view", func(fsys vtree.FS, file *vtree.File) error {
-// 		file.Write([]byte(file.Target() + `'s data`))
-// 		return nil
-// 	})
-// 	des, err := fs.ReadDir(tree, "duo/view")
-// 	is.NoErr(err)
-// 	is.Equal(len(des), 0)
-
-// 	// _index.svelte
-// 	file, err := tree.Open("duo/view/_index.svelte")
-// 	is.NoErr(err)
-// 	code, err := fs.ReadFile(tree, "duo/view/_index.svelte")
-// 	is.NoErr(err)
-// 	is.Equal(string(code), `duo/view/_index.svelte's data`)
-// 	stat, err := file.Stat()
-// 	is.NoErr(err)
-// 	is.Equal(stat.Name(), "_index.svelte")
-// 	is.Equal(stat.Mode(), fs.FileMode(0))
-// 	is.Equal(stat.IsDir(), false)
-// 	is.True(stat.ModTime().IsZero())
-// 	is.Equal(stat.Size(), int64(29))
-// 	is.Equal(stat.Sys(), nil)
-
-// 	// about/_about.svelte
-// 	file, err = tree.Open("duo/view/about/_about.svelte")
-// 	is.NoErr(err)
-// 	stat, err = file.Stat()
-// 	is.NoErr(err)
-// 	is.Equal(stat.Name(), "_about.svelte")
-// 	is.Equal(stat.Mode(), fs.FileMode(0))
-// 	is.Equal(stat.IsDir(), false)
-// 	is.True(stat.ModTime().IsZero())
-// 	is.Equal(stat.Size(), int64(35))
-// 	is.Equal(stat.Sys(), nil)
-// 	code, err = fs.ReadFile(tree, "duo/view/about/_about.svelte")
-// 	is.NoErr(err)
-// 	is.Equal(string(code), `duo/view/about/_about.svelte's data`)
-// }
-
 func TestGenerateDirNotExists(t *testing.T) {
 	is := is.New(t)
 	fsys := virt.Map{}
@@ -1115,7 +1072,7 @@ func ExampleFS() {
 		return nil
 	})
 	code, _ := fs.ReadFile(fsys, "a.txt")
-	fmt.Println(string(code))
+	os.Stdout.Write(code)
 	// Output: a
 }
 
@@ -1168,17 +1125,13 @@ func TestDirDuplicateLastWins(t *testing.T) {
 	is := is.New(t)
 	fsys := genfs.New(virt.Map{})
 	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
-		fmt.Println("first")
 		return dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
-			fmt.Println("OK.")
 			file.Write([]byte(`<h1>index</h1>`))
 			return nil
 		})
 	})
 	fsys.GenerateDir(".", func(fsys genfs.FS, dir *genfs.Dir) error {
-		fmt.Println("second")
 		return dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
-			fmt.Println("HER?E")
 			file.Write([]byte(`<h1>index2</h1>`))
 			return nil
 		})
@@ -1187,4 +1140,18 @@ func TestDirDuplicateLastWins(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(string(code), `<h1>index2</h1>`)
 	is.NoErr(fstest.TestFS(fsys, "index.html"))
+}
+
+func TestSub(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New(virt.Map{})
+	fsys.GenerateFile("pages/index.html", func(fsys genfs.FS, file *genfs.File) error {
+		file.Write([]byte(`<h1>index</h1>`))
+		return nil
+	})
+	sub, err := fs.Sub(fsys, "pages")
+	is.NoErr(err)
+	code, err := fs.ReadFile(sub, "index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
 }
