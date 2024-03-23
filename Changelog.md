@@ -1,3 +1,7 @@
+# 0.0.3 / 2024-03-23
+
+- fix error prefix, add fs.Sub test
+
 # 0.0.2 / 2024-03-21
 
 - simplify internals, reduce scope
