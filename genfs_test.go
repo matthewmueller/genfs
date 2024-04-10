@@ -1155,3 +1155,27 @@ func TestSub(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(string(code), `<h1>index</h1>`)
 }
+
+func TestGeneratedFileRetried(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New(virt.Map{})
+	called := 0
+	innerCalled := 0
+	fsys.GenerateDir("dist", func(fsys genfs.FS, dir *genfs.Dir) error {
+		called++
+		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+			innerCalled++
+			file.Write([]byte(`<h1>index</h1>`))
+			return nil
+		})
+		return nil
+	})
+	code, err := fs.ReadFile(fsys, "dist/index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
+	code, err = fs.ReadFile(fsys, "dist/index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
+	is.Equal(called, 1)
+	is.Equal(innerCalled, 2)
+}
