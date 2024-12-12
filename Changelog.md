@@ -1,3 +1,8 @@
+# 0.0.4 / 2024-12-12
+
+- bump virt
+- add sanity test
+
 # 0.0.3 / 2024-03-23
 
 - fix error prefix, add fs.Sub test
