@@ -1,3 +1,9 @@
+# 0.0.5 / 2024-12-12
+
+- Add support `fsys.Cache = cache.Memory()` and exposes `cache/` package.
+  Providing a cache greatly reduces the number of times that generators are called.
+- Support an optional `fsys.Root = dir` to work better with real filesystems
+
 # 0.0.4 / 2024-12-12
 
 - bump virt
