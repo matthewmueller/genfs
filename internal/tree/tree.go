@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -197,10 +198,18 @@ func (m *Match) Generate(cache cache.Interface, target string) (*virt.File, erro
 func (m *Match) generateGenDir(cache cache.Interface, target string) (*virt.File, error) {
 	// Run generators to discover new files, but ignore their entries since they
 	// shouldn't be creating entries anyway
+	found := false
 	for _, generator := range m.generators {
 		if _, err := generator.Generate(cache, target); err != nil {
-			return nil, err
+			if !errors.Is(err, fs.ErrNotExist) {
+				return nil, err
+			}
+			continue
 		}
+		found = true
+	}
+	if !found {
+		return nil, fs.ErrNotExist
 	}
 	// Return the directory with the children filled in
 	return &virt.File{
