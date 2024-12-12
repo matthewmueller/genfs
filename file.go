@@ -3,6 +3,7 @@ package genfs
 import (
 	"bytes"
 	"io/fs"
+	"path"
 )
 
 type File struct {
@@ -10,10 +11,11 @@ type File struct {
 	path   string
 	mode   fs.FileMode
 	data   *bytes.Buffer
+	root   string
 }
 
 func (f *File) Target() string {
-	return f.target
+	return path.Join(f.root, f.target)
 }
 
 func (f *File) Path() string {
@@ -21,7 +23,7 @@ func (f *File) Path() string {
 }
 
 func (f *File) Relative() string {
-	return relativePath(f.path, f.target)
+	return "."
 }
 
 func (f *File) Mode() fs.FileMode {

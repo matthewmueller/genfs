@@ -4,7 +4,7 @@ import (
 	"io/fs"
 	"strings"
 
-	"github.com/matthewmueller/genfs/internal/cache"
+	"github.com/matthewmueller/genfs/cache"
 	"github.com/matthewmueller/genfs/internal/tree"
 	"github.com/matthewmueller/virt"
 )
@@ -26,7 +26,7 @@ func (fn GeneratorFunc) Generate(cache cache.Interface, target string) (*virt.Fi
 }
 
 func New(fsys fs.FS) *FileSystem {
-	return &FileSystem{fsys, tree.New()}
+	return &FileSystem{fsys, tree.New(), ".", cache.Discard()}
 }
 
 func relativePath(base, target string) string {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/matryer/is"
 	"github.com/matthewmueller/genfs"
+	"github.com/matthewmueller/genfs/cache"
 	"github.com/matthewmueller/virt"
 )
 
@@ -1178,4 +1179,160 @@ func TestGeneratedFileRetried(t *testing.T) {
 	is.Equal(string(code), `<h1>index</h1>`)
 	is.Equal(called, 1)
 	is.Equal(innerCalled, 2)
+}
+
+func TestAbsolute(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New(virt.Map{})
+	fsys.Root = "/app"
+	called := 0
+	fsys.GenerateFile("a.txt", func(fsys genfs.FS, file *genfs.File) error {
+		called++
+		is.Equal(file.Path(), "a.txt")
+		is.Equal(file.Target(), "/app/a.txt")
+		is.Equal(file.Relative(), ".")
+		file.Write([]byte("a"))
+		return nil
+	})
+	fsys.GenerateDir("b", func(fsys genfs.FS, dir *genfs.Dir) error {
+		called++
+		is.Equal(dir.Path(), "b")
+		is.Equal(dir.Target(), "/app/b/b.txt")
+		is.Equal(dir.Relative(), "b.txt")
+		dir.GenerateFile("b.txt", func(fsys genfs.FS, file *genfs.File) error {
+			called++
+			is.Equal(file.Path(), "b.txt")
+			is.Equal(file.Target(), "/app/b/b.txt")
+			is.Equal(file.Relative(), ".")
+			file.Write([]byte("b"))
+			return nil
+		})
+		return nil
+	})
+	fsys.GenerateDir("c/d", func(fsys genfs.FS, dir *genfs.Dir) error {
+		called++
+		is.Equal(dir.Path(), "c/d")
+		is.Equal(dir.Target(), "/app/c/d/e.txt")
+		is.Equal(dir.Relative(), "e.txt")
+		dir.GenerateFile("e.txt", func(fsys genfs.FS, file *genfs.File) error {
+			called++
+			is.Equal(file.Path(), "e.txt")
+			is.Equal(file.Target(), "/app/c/d/e.txt")
+			is.Equal(file.Relative(), ".")
+			file.Write([]byte("e"))
+			return nil
+		})
+		return nil
+	})
+	code, err := fs.ReadFile(fsys, "a.txt")
+	is.NoErr(err)
+	is.Equal(string(code), "a")
+
+	code, err = fs.ReadFile(fsys, "b/b.txt")
+	is.NoErr(err)
+	is.Equal(string(code), "b")
+
+	code, err = fs.ReadFile(fsys, "c/d/e.txt")
+	is.NoErr(err)
+	is.Equal(string(code), "e")
+
+	is.Equal(called, 5)
+}
+
+func TestCacheReadFile(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New(virt.Map{})
+	fsys.Cache = cache.Memory()
+	dirCalled := 0
+	fileCalled := 0
+	fsys.GenerateDir("dist", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dirCalled++
+		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+			fileCalled++
+			file.Write([]byte(`<h1>index</h1>`))
+			return nil
+		})
+		return nil
+	})
+
+	code, err := fs.ReadFile(fsys, "dist/index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
+	is.Equal(dirCalled, 1)
+	is.Equal(fileCalled, 1)
+
+	code, err = fs.ReadFile(fsys, "dist/index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
+	is.Equal(dirCalled, 1)
+	is.Equal(fileCalled, 1)
+
+	code, err = fs.ReadFile(fsys, "dist/index.html")
+	is.NoErr(err)
+	is.Equal(string(code), `<h1>index</h1>`)
+	is.Equal(dirCalled, 1)
+	is.Equal(fileCalled, 1)
+}
+
+func TestCacheReadDir(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New(virt.Map{})
+	fsys.Cache = cache.Memory()
+	dirCalled := 0
+	fileCalled := 0
+	fsys.GenerateDir("dist", func(fsys genfs.FS, dir *genfs.Dir) error {
+		dirCalled++
+		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+			fileCalled++
+			file.Write([]byte(`<h1>index</h1>`))
+			return nil
+		})
+		return nil
+	})
+
+	des, err := fs.ReadDir(fsys, "dist")
+	is.NoErr(err)
+	is.Equal(len(des), 1)
+	is.Equal(des[0].Name(), "index.html")
+	is.Equal(dirCalled, 1)
+	is.Equal(fileCalled, 0)
+
+	des, err = fs.ReadDir(fsys, "dist")
+	is.NoErr(err)
+	is.Equal(len(des), 1)
+	is.Equal(des[0].Name(), "index.html")
+	is.Equal(dirCalled, 1)
+	is.Equal(fileCalled, 0)
+}
+
+func TestCacheWalk(t *testing.T) {
+	is := is.New(t)
+	fsys := genfs.New(virt.Map{})
+	fsys.Cache = cache.Memory()
+	called := map[string]int{}
+	fsys.GenerateDir("dist", func(fsys genfs.FS, dir *genfs.Dir) error {
+		called[dir.Path()]++
+		dir.GenerateFile("index.html", func(fsys genfs.FS, file *genfs.File) error {
+			called[file.Path()]++
+			file.Write([]byte(`<h1>index</h1>`))
+			return nil
+		})
+		return nil
+	})
+
+	// Walking doesn't actually read file contents
+	err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+		return err
+	})
+	is.NoErr(err)
+	is.Equal(len(called), 1)
+	is.Equal(called["dist"], 1)
+
+	// Try again
+	err = fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+		return err
+	})
+	is.NoErr(err)
+	is.Equal(len(called), 1)
+	is.Equal(called["dist"], 1)
 }

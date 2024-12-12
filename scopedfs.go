@@ -3,7 +3,7 @@ package genfs
 import (
 	"io/fs"
 
-	"github.com/matthewmueller/genfs/internal/cache"
+	"github.com/matthewmueller/genfs/cache"
 )
 
 type scopedFS struct {

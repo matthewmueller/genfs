@@ -6,41 +6,43 @@ import (
 	"io/fs"
 	"sort"
 
-	"github.com/matthewmueller/genfs/internal/cache"
+	"github.com/matthewmueller/genfs/cache"
 	"github.com/matthewmueller/genfs/internal/tree"
 	"github.com/matthewmueller/virt"
 )
 
 type FileSystem struct {
-	fsys fs.FS
-	tree *tree.Tree
+	fsys  fs.FS
+	tree  *tree.Tree
+	Root  string
+	Cache cache.Interface
 }
 
 var _ fs.FS = (*FileSystem)(nil)
 var _ fs.ReadDirFS = (*FileSystem)(nil)
 
 func (f *FileSystem) GenerateFile(relpath string, fn func(fsys FS, file *File) error) error {
-	dir := &Dir{f, f.tree, relpath, ".", fs.ModeDir}
+	dir := &Dir{f, f.tree, relpath, ".", fs.ModeDir, f.Root}
 	return dir.GenerateFile(relpath, fn)
 }
 
 func (f *FileSystem) FileGenerator(relpath string, generator FileGenerator) error {
-	dir := &Dir{f, f.tree, relpath, ".", fs.ModeDir}
+	dir := &Dir{f, f.tree, relpath, ".", fs.ModeDir, f.Root}
 	return dir.FileGenerator(relpath, generator)
 }
 
 func (f *FileSystem) GenerateDir(reldir string, fn func(fsys FS, dir *Dir) error) error {
-	dir := &Dir{f, f.tree, reldir, ".", fs.ModeDir}
+	dir := &Dir{f, f.tree, reldir, ".", fs.ModeDir, f.Root}
 	return dir.GenerateDir(reldir, fn)
 }
 
 func (f *FileSystem) DirGenerator(reldir string, generator DirGenerator) error {
-	dir := &Dir{f, f.tree, reldir, ".", fs.ModeDir}
+	dir := &Dir{f, f.tree, reldir, ".", fs.ModeDir, f.Root}
 	return dir.DirGenerator(reldir, generator)
 }
 
 func (f *FileSystem) Open(name string) (fs.File, error) {
-	return f.openWith(cache.Discard(), name)
+	return f.openWith(f.Cache, name)
 }
 
 func (f *FileSystem) openWith(cache cache.Interface, target string) (fs.File, error) {
@@ -51,7 +53,7 @@ func (f *FileSystem) openWith(cache cache.Interface, target string) (fs.File, er
 // so that we can merge generated files with the fs.FS files that can later be
 // read by Open.
 func (f *FileSystem) ReadDir(name string) (des []fs.DirEntry, err error) {
-	return f.readDirWith(cache.Discard(), name)
+	return f.readDirWith(f.Cache, name)
 }
 
 func (f *FileSystem) readDirWith(cache cache.Interface, name string) (entries []fs.DirEntry, err error) {

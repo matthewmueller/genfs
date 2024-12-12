@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/matthewmueller/genfs/internal/cache"
+	"github.com/matthewmueller/genfs/cache"
 	"github.com/matthewmueller/virt"
 	"github.com/xlab/treeprint"
 )

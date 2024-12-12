@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/matryer/is"
-	"github.com/matthewmueller/genfs/internal/cache"
+	"github.com/matthewmueller/genfs/cache"
 	"github.com/matthewmueller/genfs/internal/tree"
 	"github.com/matthewmueller/virt"
 )
